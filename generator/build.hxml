@@ -1,0 +1,7 @@
+-main Main
+-js out.js
+-lib hxnodejs
+-cmd node out.js
+--next
+Out
+--interp
