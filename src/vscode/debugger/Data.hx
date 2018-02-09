@@ -133,10 +133,8 @@ typedef ProtocolMessageArgs<A> = {
 
 @:forward abstract ProtocolMessage<A>(ProtocolMessageArgs<A>) {
   @:from inline public static function fromRequest<A>(t:Request<Dynamic>):ProtocolMessage<A> return cast t;
-   @:from inline public static function fromEvent<A>(t:Event<Dynamic>):ProtocolMessage<A> return cast t;
-   @:from inline public static function fromResponse<A>(t:Response):ProtocolMessage<A> return cast t;
-   inline public function doType<T : { type : TypeEnum<T> }>(fn:T->Void) fn(cast this);
-  inline public function withType<T : { type : TypeEnum<T> }, Ret>(fn:T->Ret):Ret return fn(cast this);
+  @:from inline public static function fromEvent<A>(t:Event<Dynamic>):ProtocolMessage<A> return cast t;
+  @:from inline public static function fromResponse<A>(t:Response):ProtocolMessage<A> return cast t;
 }
 
 /**
@@ -158,47 +156,44 @@ typedef RequestArgs<A> = {
     The command to execute.
   **/
   var command : RequestCommandEnum<A>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
 }
 
 @:forward abstract Request<A>(RequestArgs<A>) {
   @:from inline public static function fromRunInTerminalRequest<A>(t:RunInTerminalRequest):Request<A> return cast t;
-   @:from inline public static function fromInitializeRequest<A>(t:InitializeRequest):Request<A> return cast t;
-   @:from inline public static function fromConfigurationDoneRequest<A>(t:ConfigurationDoneRequest):Request<A> return cast t;
-   @:from inline public static function fromLaunchRequest<A>(t:LaunchRequest):Request<A> return cast t;
-   @:from inline public static function fromAttachRequest<A>(t:AttachRequest):Request<A> return cast t;
-   @:from inline public static function fromRestartRequest<A>(t:RestartRequest):Request<A> return cast t;
-   @:from inline public static function fromDisconnectRequest<A>(t:DisconnectRequest):Request<A> return cast t;
-   @:from inline public static function fromSetBreakpointsRequest<A>(t:SetBreakpointsRequest):Request<A> return cast t;
-   @:from inline public static function fromSetFunctionBreakpointsRequest<A>(t:SetFunctionBreakpointsRequest):Request<A> return cast t;
-   @:from inline public static function fromSetExceptionBreakpointsRequest<A>(t:SetExceptionBreakpointsRequest):Request<A> return cast t;
-   @:from inline public static function fromContinueRequest<A>(t:ContinueRequest):Request<A> return cast t;
-   @:from inline public static function fromNextRequest<A>(t:NextRequest):Request<A> return cast t;
-   @:from inline public static function fromStepInRequest<A>(t:StepInRequest):Request<A> return cast t;
-   @:from inline public static function fromStepOutRequest<A>(t:StepOutRequest):Request<A> return cast t;
-   @:from inline public static function fromStepBackRequest<A>(t:StepBackRequest):Request<A> return cast t;
-   @:from inline public static function fromReverseContinueRequest<A>(t:ReverseContinueRequest):Request<A> return cast t;
-   @:from inline public static function fromRestartFrameRequest<A>(t:RestartFrameRequest):Request<A> return cast t;
-   @:from inline public static function fromGotoRequest<A>(t:GotoRequest):Request<A> return cast t;
-   @:from inline public static function fromPauseRequest<A>(t:PauseRequest):Request<A> return cast t;
-   @:from inline public static function fromStackTraceRequest<A>(t:StackTraceRequest):Request<A> return cast t;
-   @:from inline public static function fromScopesRequest<A>(t:ScopesRequest):Request<A> return cast t;
-   @:from inline public static function fromVariablesRequest<A>(t:VariablesRequest):Request<A> return cast t;
-   @:from inline public static function fromSetVariableRequest<A>(t:SetVariableRequest):Request<A> return cast t;
-   @:from inline public static function fromSourceRequest<A>(t:SourceRequest):Request<A> return cast t;
-   @:from inline public static function fromThreadsRequest<A>(t:ThreadsRequest):Request<A> return cast t;
-   @:from inline public static function fromModulesRequest<A>(t:ModulesRequest):Request<A> return cast t;
-   @:from inline public static function fromLoadedSourcesRequest<A>(t:LoadedSourcesRequest):Request<A> return cast t;
-   @:from inline public static function fromEvaluateRequest<A>(t:EvaluateRequest):Request<A> return cast t;
-   @:from inline public static function fromStepInTargetsRequest<A>(t:StepInTargetsRequest):Request<A> return cast t;
-   @:from inline public static function fromGotoTargetsRequest<A>(t:GotoTargetsRequest):Request<A> return cast t;
-   @:from inline public static function fromCompletionsRequest<A>(t:CompletionsRequest):Request<A> return cast t;
-   @:from inline public static function fromExceptionInfoRequest<A>(t:ExceptionInfoRequest):Request<A> return cast t;
-   inline public function doRequestCommand<T : { RequestCommand : RequestCommandEnum<T> }>(fn:T->Void) fn(cast this);
-  inline public function withRequestCommand<T : { RequestCommand : RequestCommandEnum<T> }, Ret>(fn:T->Ret):Ret return fn(cast this);
+  @:from inline public static function fromInitializeRequest<A>(t:InitializeRequest):Request<A> return cast t;
+  @:from inline public static function fromConfigurationDoneRequest<A>(t:ConfigurationDoneRequest):Request<A> return cast t;
+  @:from inline public static function fromLaunchRequest<A>(t:LaunchRequest):Request<A> return cast t;
+  @:from inline public static function fromAttachRequest<A>(t:AttachRequest):Request<A> return cast t;
+  @:from inline public static function fromRestartRequest<A>(t:RestartRequest):Request<A> return cast t;
+  @:from inline public static function fromDisconnectRequest<A>(t:DisconnectRequest):Request<A> return cast t;
+  @:from inline public static function fromSetBreakpointsRequest<A>(t:SetBreakpointsRequest):Request<A> return cast t;
+  @:from inline public static function fromSetFunctionBreakpointsRequest<A>(t:SetFunctionBreakpointsRequest):Request<A> return cast t;
+  @:from inline public static function fromSetExceptionBreakpointsRequest<A>(t:SetExceptionBreakpointsRequest):Request<A> return cast t;
+  @:from inline public static function fromContinueRequest<A>(t:ContinueRequest):Request<A> return cast t;
+  @:from inline public static function fromNextRequest<A>(t:NextRequest):Request<A> return cast t;
+  @:from inline public static function fromStepInRequest<A>(t:StepInRequest):Request<A> return cast t;
+  @:from inline public static function fromStepOutRequest<A>(t:StepOutRequest):Request<A> return cast t;
+  @:from inline public static function fromStepBackRequest<A>(t:StepBackRequest):Request<A> return cast t;
+  @:from inline public static function fromReverseContinueRequest<A>(t:ReverseContinueRequest):Request<A> return cast t;
+  @:from inline public static function fromRestartFrameRequest<A>(t:RestartFrameRequest):Request<A> return cast t;
+  @:from inline public static function fromGotoRequest<A>(t:GotoRequest):Request<A> return cast t;
+  @:from inline public static function fromPauseRequest<A>(t:PauseRequest):Request<A> return cast t;
+  @:from inline public static function fromStackTraceRequest<A>(t:StackTraceRequest):Request<A> return cast t;
+  @:from inline public static function fromScopesRequest<A>(t:ScopesRequest):Request<A> return cast t;
+  @:from inline public static function fromVariablesRequest<A>(t:VariablesRequest):Request<A> return cast t;
+  @:from inline public static function fromSetVariableRequest<A>(t:SetVariableRequest):Request<A> return cast t;
+  @:from inline public static function fromSourceRequest<A>(t:SourceRequest):Request<A> return cast t;
+  @:from inline public static function fromThreadsRequest<A>(t:ThreadsRequest):Request<A> return cast t;
+  @:from inline public static function fromModulesRequest<A>(t:ModulesRequest):Request<A> return cast t;
+  @:from inline public static function fromLoadedSourcesRequest<A>(t:LoadedSourcesRequest):Request<A> return cast t;
+  @:from inline public static function fromEvaluateRequest<A>(t:EvaluateRequest):Request<A> return cast t;
+  @:from inline public static function fromStepInTargetsRequest<A>(t:StepInTargetsRequest):Request<A> return cast t;
+  @:from inline public static function fromGotoTargetsRequest<A>(t:GotoTargetsRequest):Request<A> return cast t;
+  @:from inline public static function fromCompletionsRequest<A>(t:CompletionsRequest):Request<A> return cast t;
+  @:from inline public static function fromExceptionInfoRequest<A>(t:ExceptionInfoRequest):Request<A> return cast t;
+  @:from inline public static function fromRequest<A>(t:Request<Dynamic>):Request<A> return cast t;
+  @:from inline public static function fromEvent<A>(t:Event<Dynamic>):Request<A> return cast t;
+  @:from inline public static function fromResponse<A>(t:Response):Request<A> return cast t;
 }
 
 /**
@@ -224,18 +219,19 @@ typedef EventArgs<A> = {
 
 @:forward abstract Event<A>(EventArgs<A>) {
   @:from inline public static function fromInitializedEvent<A>(t:InitializedEvent):Event<A> return cast t;
-   @:from inline public static function fromStoppedEvent<A>(t:StoppedEvent):Event<A> return cast t;
-   @:from inline public static function fromContinuedEvent<A>(t:ContinuedEvent):Event<A> return cast t;
-   @:from inline public static function fromExitedEvent<A>(t:ExitedEvent):Event<A> return cast t;
-   @:from inline public static function fromTerminatedEvent<A>(t:TerminatedEvent):Event<A> return cast t;
-   @:from inline public static function fromThreadEvent<A>(t:ThreadEvent):Event<A> return cast t;
-   @:from inline public static function fromOutputEvent<A>(t:OutputEvent):Event<A> return cast t;
-   @:from inline public static function fromBreakpointEvent<A>(t:BreakpointEvent):Event<A> return cast t;
-   @:from inline public static function fromModuleEvent<A>(t:ModuleEvent):Event<A> return cast t;
-   @:from inline public static function fromLoadedSourceEvent<A>(t:LoadedSourceEvent):Event<A> return cast t;
-   @:from inline public static function fromProcessEvent<A>(t:ProcessEvent):Event<A> return cast t;
-   inline public function doEvent<T : { event : EventEnum<T> }>(fn:T->Void) fn(cast this);
-  inline public function withEvent<T : { event : EventEnum<T> }, Ret>(fn:T->Ret):Ret return fn(cast this);
+  @:from inline public static function fromStoppedEvent<A>(t:StoppedEvent):Event<A> return cast t;
+  @:from inline public static function fromContinuedEvent<A>(t:ContinuedEvent):Event<A> return cast t;
+  @:from inline public static function fromExitedEvent<A>(t:ExitedEvent):Event<A> return cast t;
+  @:from inline public static function fromTerminatedEvent<A>(t:TerminatedEvent):Event<A> return cast t;
+  @:from inline public static function fromThreadEvent<A>(t:ThreadEvent):Event<A> return cast t;
+  @:from inline public static function fromOutputEvent<A>(t:OutputEvent):Event<A> return cast t;
+  @:from inline public static function fromBreakpointEvent<A>(t:BreakpointEvent):Event<A> return cast t;
+  @:from inline public static function fromModuleEvent<A>(t:ModuleEvent):Event<A> return cast t;
+  @:from inline public static function fromLoadedSourceEvent<A>(t:LoadedSourceEvent):Event<A> return cast t;
+  @:from inline public static function fromProcessEvent<A>(t:ProcessEvent):Event<A> return cast t;
+  @:from inline public static function fromRequest<A>(t:Request<Dynamic>):Event<A> return cast t;
+  @:from inline public static function fromEvent<A>(t:Event<Dynamic>):Event<A> return cast t;
+  @:from inline public static function fromResponse<A>(t:Response):Event<A> return cast t;
 }
 
 /**
@@ -691,10 +687,6 @@ typedef RunInTerminalRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<RunInTerminalRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -704,6 +696,7 @@ typedef RunInTerminalRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : RunInTerminalRequestArguments;
 }
 
 /**
@@ -775,10 +768,6 @@ typedef InitializeRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<InitializeRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -788,6 +777,7 @@ typedef InitializeRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : InitializeRequestArguments;
 }
 
 /**
@@ -850,10 +840,6 @@ typedef ConfigurationDoneRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<ConfigurationDoneRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -863,6 +849,7 @@ typedef ConfigurationDoneRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  @:optional var arguments : ConfigurationDoneArguments;
 }
 
 /**
@@ -889,10 +876,6 @@ typedef LaunchRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<LaunchRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -902,6 +885,7 @@ typedef LaunchRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : LaunchRequestArguments;
 }
 
 /**
@@ -931,10 +915,6 @@ typedef AttachRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<AttachRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -944,6 +924,7 @@ typedef AttachRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : AttachRequestArguments;
 }
 
 /**
@@ -974,10 +955,6 @@ typedef RestartRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<RestartRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -987,6 +964,7 @@ typedef RestartRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  @:optional var arguments : RestartArguments;
 }
 
 /**
@@ -1013,10 +991,6 @@ typedef DisconnectRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<DisconnectRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1026,6 +1000,7 @@ typedef DisconnectRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  @:optional var arguments : DisconnectArguments;
 }
 
 /**
@@ -1060,10 +1035,6 @@ typedef SetBreakpointsRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<SetBreakpointsRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1073,6 +1044,7 @@ typedef SetBreakpointsRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : SetBreakpointsArguments;
 }
 
 /**
@@ -1129,10 +1101,6 @@ typedef SetFunctionBreakpointsRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<SetFunctionBreakpointsRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1142,6 +1110,7 @@ typedef SetFunctionBreakpointsRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : SetFunctionBreakpointsArguments;
 }
 
 /**
@@ -1181,10 +1150,6 @@ typedef SetExceptionBreakpointsRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<SetExceptionBreakpointsRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1194,6 +1159,7 @@ typedef SetExceptionBreakpointsRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : SetExceptionBreakpointsArguments;
 }
 
 /**
@@ -1228,10 +1194,6 @@ typedef ContinueRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<ContinueRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1241,6 +1203,7 @@ typedef ContinueRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : ContinueArguments;
 }
 
 /**
@@ -1280,10 +1243,6 @@ typedef NextRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<NextRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1293,6 +1252,7 @@ typedef NextRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : NextArguments;
 }
 
 /**
@@ -1328,10 +1288,6 @@ typedef StepInRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<StepInRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1341,6 +1297,7 @@ typedef StepInRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : StepInArguments;
 }
 
 /**
@@ -1376,10 +1333,6 @@ typedef StepOutRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<StepOutRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1389,6 +1342,7 @@ typedef StepOutRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : StepOutArguments;
 }
 
 /**
@@ -1420,10 +1374,6 @@ typedef StepBackRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<StepBackRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1433,6 +1383,7 @@ typedef StepBackRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : StepBackArguments;
 }
 
 /**
@@ -1463,10 +1414,6 @@ typedef ReverseContinueRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<ReverseContinueRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1476,6 +1423,7 @@ typedef ReverseContinueRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : ReverseContinueArguments;
 }
 
 /**
@@ -1507,10 +1455,6 @@ typedef RestartFrameRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<RestartFrameRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1520,6 +1464,7 @@ typedef RestartFrameRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : RestartFrameArguments;
 }
 
 /**
@@ -1553,10 +1498,6 @@ typedef GotoRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<GotoRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1566,6 +1507,7 @@ typedef GotoRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : GotoArguments;
 }
 
 /**
@@ -1601,10 +1543,6 @@ typedef PauseRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<PauseRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1614,6 +1552,7 @@ typedef PauseRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : PauseArguments;
 }
 
 /**
@@ -1643,10 +1582,6 @@ typedef StackTraceRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<StackTraceRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1656,6 +1591,7 @@ typedef StackTraceRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : StackTraceArguments;
 }
 
 /**
@@ -1711,10 +1647,6 @@ typedef ScopesRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<ScopesRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1724,6 +1656,7 @@ typedef ScopesRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : ScopesArguments;
 }
 
 /**
@@ -1763,10 +1696,6 @@ typedef VariablesRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<VariablesRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1776,6 +1705,7 @@ typedef VariablesRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : VariablesArguments;
 }
 
 /**
@@ -1830,10 +1760,6 @@ typedef SetVariableRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<SetVariableRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1843,6 +1769,7 @@ typedef SetVariableRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : SetVariableArguments;
 }
 
 /**
@@ -1911,10 +1838,6 @@ typedef SourceRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<SourceRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -1924,6 +1847,7 @@ typedef SourceRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : SourceArguments;
 }
 
 /**
@@ -1970,10 +1894,6 @@ typedef ThreadsRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<ThreadsRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -2010,10 +1930,6 @@ typedef ModulesRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<ModulesRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -2023,6 +1939,7 @@ typedef ModulesRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : ModulesArguments;
 }
 
 /**
@@ -2068,10 +1985,6 @@ typedef LoadedSourcesRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<LoadedSourcesRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -2081,6 +1994,7 @@ typedef LoadedSourcesRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  @:optional var arguments : LoadedSourcesArguments;
 }
 
 /**
@@ -2117,10 +2031,6 @@ typedef EvaluateRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<EvaluateRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -2130,6 +2040,7 @@ typedef EvaluateRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : EvaluateArguments;
 }
 
 /**
@@ -2204,10 +2115,6 @@ typedef StepInTargetsRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<StepInTargetsRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -2217,6 +2124,7 @@ typedef StepInTargetsRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : StepInTargetsArguments;
 }
 
 /**
@@ -2257,10 +2165,6 @@ typedef GotoTargetsRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<GotoTargetsRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -2270,6 +2174,7 @@ typedef GotoTargetsRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : GotoTargetsArguments;
 }
 
 /**
@@ -2317,10 +2222,6 @@ typedef CompletionsRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<CompletionsRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -2330,6 +2231,7 @@ typedef CompletionsRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : CompletionsArguments;
 }
 
 /**
@@ -2380,10 +2282,6 @@ typedef ExceptionInfoRequest = {
     The command to execute.
   **/
   var command : RequestCommandEnum<ExceptionInfoRequest>;
-  /**
-    Object containing arguments for the command.
-  **/
-  @:optional var arguments : Dynamic;
   // end Request implementation
 
   // ProtocolMessage implementation
@@ -2393,6 +2291,7 @@ typedef ExceptionInfoRequest = {
   var seq : Int;
   // end ProtocolMessage implementation
 
+  var arguments : ExceptionInfoArguments;
 }
 
 /**

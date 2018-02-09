@@ -1,5 +1,17 @@
 package utils;
 
 typedef Settings = {
-    logLevel:Int,
+    ?logLevel:Int,
+    ?stopOnEntry:Bool,
+    ?debugOutput:String,
+}
+
+typedef LaunchSettings = {
+    > Settings,
+    ?compile: {
+        ?path:String,
+        command:String
+    },
+    ?runPath:String,
+    runCommand:String
 }

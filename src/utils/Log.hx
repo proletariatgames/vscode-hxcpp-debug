@@ -1,14 +1,14 @@
 package utils;
 import vscode.debugger.Data;
-import cpp.vm.Deque;
 import haxe.PosInfos;
 
 @:enum abstract LogLevel(Int) {
-    var VeryVerbose = 1;
-    var Verbose = 10;
-    var Log = 20;
-    var Warning = 50;
-    var Error = 100;
+    var VeryVerbose = 100;
+    var Verbose = 50;
+    var OnlyLog = 10;
+    var Warning = 5;
+    var Error = 1;
+    var Fatal = 0;
 
     inline public function int() {
         return this;
@@ -17,20 +17,27 @@ import haxe.PosInfos;
 
 class Log {
     public static function log_with_level(level:LogLevel, msg:String, ?pos:PosInfos) {
-        var data:OutputEvent = {
-            type: Event,
-            event: Output,
-            seq: 0,
-            body: {
-                category: level.int() < Warning.int() ? Stdout : Stderr,
-                output: msg,
-            }
-        };
-        Globals.addStdout(ProtocolMessage.fromEvent(data));
+        Globals.record_log(level, msg, pos);
+        if (level != Fatal && Globals.get_settings().logLevel < level.int()) {
+            return;
+        }
+
+        for (piece in msg.split('\n')) {
+            var data:OutputEvent = {
+                type: Event,
+                event: Output,
+                seq: 0,
+                body: {
+                    category: level.int() > Warning.int() ? Stdout : Stderr,
+                    output: piece + '\n',
+                }
+            };
+            Globals.add_stdout(ProtocolMessage.fromEvent(data));
+        }
     }
 
     inline public static function log(msg:String, ?pos:PosInfos) {
-        log_with_level(Log, msg, pos);
+        log_with_level(OnlyLog, msg, pos);
     }
 
     inline public static function verbose(msg:String, ?pos:PosInfos) {
@@ -47,5 +54,10 @@ class Log {
 
     inline public static function error(msg:String, ?pos:PosInfos) {
         log_with_level(Error, msg, pos);
+    }
+
+    inline public static function fatal(msg:String, ?pos:PosInfos) {
+        log_with_level(Fatal, msg, pos);
+        Globals.exit(1);
     }
 }

@@ -120,7 +120,7 @@ class Main {
                             var prop = Reflect.field(props, propName);
                             var unionName = unionPropName(propName, typeName);
                             if (!Reflect.hasField(prop, 'enum') && !Reflect.hasField(prop, "$ref") && unionFields.exists(unionName)) {
-                                type.params[propName] = type.nArgs++;
+                                // type.params[propName] = type.nArgs++;
                             }
                         }
                     }
@@ -131,14 +131,14 @@ class Main {
         for (kind in unionFields.keys()) {
             var map = unionFields[kind];
             var name = toFirstUpper(kind) + 'Enum';
-            ret.add('@:enum abstract $name<T>(String) {\n');
+            ret.add('@:enum abstract $name(String) {\n');
             for (strName in map.keys()) {
                 var typeName = map[strName];
                 var type = types[typeName];
                 if (type.nArgs != 0) {
                     typeName += '<' + [for (_ in 0...type.nArgs) 'Dynamic'].join(', ') + '>';
                 }
-                ret.add('  var ${toFirstUpper(strName)} : $name<${typeName}> = "$strName";\n');
+                ret.add('  var ${toFirstUpper(strName)} = "$strName";\n');
             }
             // ret.add('  inline function do<T : $name<T>>(fn:$name<T>->Void) fn(cast this);\n');
             // ret.add('  inline function with<T : $name<T>, B>(fn:$name<T>->B) return fn(cast this);\n');
@@ -220,7 +220,7 @@ class Main {
                             argName += '<' + [for (i in 0...typeToUse.nArgs) 'Dynamic'].join(', ') + '>';
                         }
                     }
-                    writePart(toFirstUpper(unionName) + 'Enum<' + argName + '>');
+                    writePart(toFirstUpper(unionName) + 'Enum');
                 } else if (name != null && enumFields.exists(name) ) {
                     writePart(toFirstUpper(name) + 'Enum');
                 } else if (Std.is(def.type, Array)) {
@@ -313,14 +313,14 @@ class Main {
                             trace(curType);
                             continue;
                         }
-                        for (typeName in unions) {
-                            var type = types[typeName];
-                            var typeArgs = '';
-                            if (type.nArgs != 0) {
-                                typeArgs = '<' + [for (_ in 0...type.nArgs) 'Dynamic'].join(',') + '>';
-                            }
-                            write('@:from inline public static function from$typeName$args(t:$typeName$typeArgs):$name$args return cast t;');
-                        }
+                        // for (typeName in unions) {
+                        //     var type = types[typeName];
+                        //     var typeArgs = '';
+                        //     if (type.nArgs != 0) {
+                        //         typeArgs = '<' + [for (_ in 0...type.nArgs) 'Dynamic'].join(',') + '>';
+                        //     }
+                        //     write('@:from inline public static function from$typeName$args(t:$typeName$typeArgs):$name$args return cast t;');
+                        // }
                     }
                     var sup = curType.supers[0];
                     if (sup == null) {

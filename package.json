@@ -45,8 +45,42 @@
                 "type": "boolean",
                 "description": "Automatically stop after launch.",
                 "default": true
+              },
+              "logLevel": {
+                "type": "integer",
+                "description": "The debugger log level. Goes from 1 (only errors) to 100 (very verbose). Defaults to 10 (log).",
+                "default": 10
+              },
+              "debugOutput": {
+                "type": "string",
+                "description": "An optional output directory which contains detailed debugger information. Can be used to investigate debugger-related issues."
+              },
+              "compile": {
+                "type": "object",
+                "description": "Set this if you want the debugger to compile the project before running",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "An optional path which specifies the directory where a compilation will take place."
+                  },
+                  "command": {
+                    "type": "string",
+                    "description": "The command used to compile. If omitted, the debugger will not compile the script"
+                  }
+                },
+                "required": ["command"]
+              },
+              "runPath": {
+                "type": "string",
+                "description": "Sets the path from where the command will run.",
+                "default": "${workspaceRoot}"
+              },
+              "runCommand": {
+                "type": "string",
+                "description": "Sets the command used to run the program"
               }
-            }
+            },
+            "required": ["runCommand"]
           }
         },
 
