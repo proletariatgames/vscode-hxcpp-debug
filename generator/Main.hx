@@ -172,11 +172,11 @@ class Main {
                         required = [];
                     }
                     for (propName in Reflect.fields(def.properties)) {
-                        if (addedVars.exists(propName) || (typeName == 'Response' && propName == 'body')) {
+                        if (addedVars.exists(propName) || (typeName == 'Response' && propName == 'body') || (typeName == 'Request' && propName == 'arguments')) {
                             continue;
                         }
                         var prop = Reflect.field(def.properties, propName);
-                        if (propName == 'body' && prop.type != 'object') {
+                        if ((propName == 'body' && prop.type != 'object') || (propName == 'arguments' && !Reflect.hasField(prop, "$ref"))) {
                             continue;
                         }
                         addedVars[propName] = true;
@@ -303,30 +303,38 @@ class Main {
                 writeStart('@:forward abstract $name$args(${name}Args$args) ');
                 begin('{');
                 trace(type);
-                for (param in type.params.keys()) {
-                    var unionName = unionPropName(param, typeName);
-                    var unions = unionFields[unionName];
-                    if (unions == null) {
-                        trace(param);
-                        trace(type);
-                        continue;
-                    }
-                    for (typeName in unions) {
-                        var type = types[typeName];
-                        var typeArgs = '';
-                        if (type.nArgs != 0) {
-                            typeArgs = '<' + [for (_ in 0...type.nArgs) 'Dynamic'].join(',') + '>';
+                var curType = type;
+                while(curType != null) {
+                    for (param in curType.params.keys()) {
+                        var unionName = unionPropName(param, typeName);
+                        var unions = unionFields[unionName];
+                        if (unions == null) {
+                            trace(param);
+                            trace(curType);
+                            continue;
                         }
-                        write('@:from inline public static function from$typeName$args(t:$typeName$typeArgs):$name$args return cast t;');
-                        writePart(' ');
+                        for (typeName in unions) {
+                            var type = types[typeName];
+                            var typeArgs = '';
+                            if (type.nArgs != 0) {
+                                typeArgs = '<' + [for (_ in 0...type.nArgs) 'Dynamic'].join(',') + '>';
+                            }
+                            write('@:from inline public static function from$typeName$args(t:$typeName$typeArgs):$name$args return cast t;');
+                        }
+                    }
+                    var sup = curType.supers[0];
+                    if (sup == null) {
+                        curType = null;
+                    } else {
+                        curType = types[sup];
                     }
                 }
-                for (param in type.params.keys()) {
-                    var param = unionPropName(param, typeName);
-                    var Param = toFirstUpper(param);
-                    write('inline public function do${Param}<T : { $param : ${Param}Enum<T> }>(fn:T->Void) fn(cast this);');
-                    write('inline public function with${Param}<T : { $param : ${Param}Enum<T> }, Ret>(fn:T->Ret):Ret return fn(cast this);');
-                }
+                // for (param in type.params.keys()) {
+                //     var paramName = unionPropName(param, typeName);
+                //     var ParamName = toFirstUpper(paramName);
+                //     write('inline public function do${ParamName}<T : { $param : ${ParamName}Enum<T> }>(fn:T->Void) fn( (cast this : T) );');
+                //     write('inline public function with${ParamName}<T : { $param : ${ParamName}Enum<T> }, Ret>(fn:T->Ret):Ret return fn( (cast this : T) );');
+                // }
                 end('}');
             }
         }
