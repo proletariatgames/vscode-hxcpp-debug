@@ -59,28 +59,45 @@
                 "type": "object",
                 "description": "Set this if you want the debugger to compile the project before running",
                 "properties": {
-                  "path": {
+                  "cwd": {
                     "type": "string",
-                    "description": "An optional path which specifies the directory where a compilation will take place."
+                    "description": "An optional path which specifies the directory where a compilation will take place.\nThis can be used to indicate where the project was compiled, in order to fix relative paths."
                   },
-                  "command": {
+                  "args": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "List of arguments. The first argument is the command to run."
+                  }
+                }
+              },
+              "run": {
+                "type": "object",
+                "description": "Set this if you want the debugger to compile the project before running",
+                "properties": {
+                  "cwd": {
                     "type": "string",
-                    "description": "The command used to compile. If omitted, the debugger will not compile the script"
+                    "description": "An optional path which specifies the directory where a compilation will take place.",
+                    "default": "${workspaceRoot}"
+                  },
+                  "args": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "List of arguments. The first argument is the command to run."
                   }
                 },
-                "required": ["command"]
+                "required": ["args"]
               },
-              "runPath": {
-                "type": "string",
-                "description": "Sets the path from where the command will run.",
-                "default": "${workspaceRoot}"
-              },
-              "runCommand": {
-                "type": "string",
-                "description": "Sets the command used to run the program"
+              "port": {
+                "type": "object",
+                "description": "The target port. If set to a value less than 0, it will be chosen at random and passed as an environment variable, HXCPP_DEBUGGER_PORT.",
+                "default": 6972
               }
             },
-            "required": ["runCommand"]
+            "required": ["run"]
           }
         },
 

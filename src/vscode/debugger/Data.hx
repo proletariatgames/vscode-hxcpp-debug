@@ -1,58 +1,58 @@
 package vscode.debugger;
 
-@:enum abstract TypeEnum<T>(String) {
-  var Request : TypeEnum<Request<Dynamic>> = "request";
-  var Event : TypeEnum<Event<Dynamic>> = "event";
-  var Response : TypeEnum<Response> = "response";
+@:enum abstract TypeEnum(String) {
+  var Request = "request";
+  var Event = "event";
+  var Response = "response";
 }
 
-@:enum abstract EventEnum<T>(String) {
-  var Initialized : EventEnum<InitializedEvent> = "initialized";
-  var Stopped : EventEnum<StoppedEvent> = "stopped";
-  var Continued : EventEnum<ContinuedEvent> = "continued";
-  var Exited : EventEnum<ExitedEvent> = "exited";
-  var Terminated : EventEnum<TerminatedEvent> = "terminated";
-  var Thread : EventEnum<ThreadEvent> = "thread";
-  var Output : EventEnum<OutputEvent> = "output";
-  var Breakpoint : EventEnum<BreakpointEvent> = "breakpoint";
-  var Module : EventEnum<ModuleEvent> = "module";
-  var LoadedSource : EventEnum<LoadedSourceEvent> = "loadedSource";
-  var Process : EventEnum<ProcessEvent> = "process";
+@:enum abstract EventEnum(String) {
+  var Initialized = "initialized";
+  var Stopped = "stopped";
+  var Continued = "continued";
+  var Exited = "exited";
+  var Terminated = "terminated";
+  var Thread = "thread";
+  var Output = "output";
+  var Breakpoint = "breakpoint";
+  var Module = "module";
+  var LoadedSource = "loadedSource";
+  var Process = "process";
 }
 
-@:enum abstract RequestCommandEnum<T>(String) {
-  var RunInTerminal : RequestCommandEnum<RunInTerminalRequest> = "runInTerminal";
-  var Initialize : RequestCommandEnum<InitializeRequest> = "initialize";
-  var ConfigurationDone : RequestCommandEnum<ConfigurationDoneRequest> = "configurationDone";
-  var Launch : RequestCommandEnum<LaunchRequest> = "launch";
-  var Attach : RequestCommandEnum<AttachRequest> = "attach";
-  var Restart : RequestCommandEnum<RestartRequest> = "restart";
-  var Disconnect : RequestCommandEnum<DisconnectRequest> = "disconnect";
-  var SetBreakpoints : RequestCommandEnum<SetBreakpointsRequest> = "setBreakpoints";
-  var SetFunctionBreakpoints : RequestCommandEnum<SetFunctionBreakpointsRequest> = "setFunctionBreakpoints";
-  var SetExceptionBreakpoints : RequestCommandEnum<SetExceptionBreakpointsRequest> = "setExceptionBreakpoints";
-  var Continue : RequestCommandEnum<ContinueRequest> = "continue";
-  var Next : RequestCommandEnum<NextRequest> = "next";
-  var StepIn : RequestCommandEnum<StepInRequest> = "stepIn";
-  var StepOut : RequestCommandEnum<StepOutRequest> = "stepOut";
-  var StepBack : RequestCommandEnum<StepBackRequest> = "stepBack";
-  var ReverseContinue : RequestCommandEnum<ReverseContinueRequest> = "reverseContinue";
-  var RestartFrame : RequestCommandEnum<RestartFrameRequest> = "restartFrame";
-  var Goto : RequestCommandEnum<GotoRequest> = "goto";
-  var Pause : RequestCommandEnum<PauseRequest> = "pause";
-  var StackTrace : RequestCommandEnum<StackTraceRequest> = "stackTrace";
-  var Scopes : RequestCommandEnum<ScopesRequest> = "scopes";
-  var Variables : RequestCommandEnum<VariablesRequest> = "variables";
-  var SetVariable : RequestCommandEnum<SetVariableRequest> = "setVariable";
-  var Source : RequestCommandEnum<SourceRequest> = "source";
-  var Threads : RequestCommandEnum<ThreadsRequest> = "threads";
-  var Modules : RequestCommandEnum<ModulesRequest> = "modules";
-  var LoadedSources : RequestCommandEnum<LoadedSourcesRequest> = "loadedSources";
-  var Evaluate : RequestCommandEnum<EvaluateRequest> = "evaluate";
-  var StepInTargets : RequestCommandEnum<StepInTargetsRequest> = "stepInTargets";
-  var GotoTargets : RequestCommandEnum<GotoTargetsRequest> = "gotoTargets";
-  var Completions : RequestCommandEnum<CompletionsRequest> = "completions";
-  var ExceptionInfo : RequestCommandEnum<ExceptionInfoRequest> = "exceptionInfo";
+@:enum abstract RequestCommandEnum(String) {
+  var RunInTerminal = "runInTerminal";
+  var Initialize = "initialize";
+  var ConfigurationDone = "configurationDone";
+  var Launch = "launch";
+  var Attach = "attach";
+  var Restart = "restart";
+  var Disconnect = "disconnect";
+  var SetBreakpoints = "setBreakpoints";
+  var SetFunctionBreakpoints = "setFunctionBreakpoints";
+  var SetExceptionBreakpoints = "setExceptionBreakpoints";
+  var Continue = "continue";
+  var Next = "next";
+  var StepIn = "stepIn";
+  var StepOut = "stepOut";
+  var StepBack = "stepBack";
+  var ReverseContinue = "reverseContinue";
+  var RestartFrame = "restartFrame";
+  var Goto = "goto";
+  var Pause = "pause";
+  var StackTrace = "stackTrace";
+  var Scopes = "scopes";
+  var Variables = "variables";
+  var SetVariable = "setVariable";
+  var Source = "source";
+  var Threads = "threads";
+  var Modules = "modules";
+  var LoadedSources = "loadedSources";
+  var Evaluate = "evaluate";
+  var StepInTargets = "stepInTargets";
+  var GotoTargets = "gotoTargets";
+  var Completions = "completions";
+  var ExceptionInfo = "exceptionInfo";
 }
 
 @:enum abstract ReasonEnum(String) {
@@ -120,7 +120,7 @@ package vscode.debugger;
 /**
   Base class of requests, responses, and events.
 **/
-typedef ProtocolMessageArgs<A> = {
+typedef ProtocolMessage = {
   /**
     Sequence number.
   **/
@@ -128,127 +128,39 @@ typedef ProtocolMessageArgs<A> = {
   /**
     Message type.
   **/
-  var type : TypeEnum<A>;
-}
-
-@:forward abstract ProtocolMessage<A>(ProtocolMessageArgs<A>) {
-  @:from inline public static function fromRequest<A>(t:Request<Dynamic>):ProtocolMessage<A> return cast t;
-  @:from inline public static function fromEvent<A>(t:Event<Dynamic>):ProtocolMessage<A> return cast t;
-  @:from inline public static function fromResponse<A>(t:Response):ProtocolMessage<A> return cast t;
+  var type : TypeEnum;
 }
 
 /**
   A client or server-initiated request.
 **/
-typedef RequestArgs<A> = {
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  /**
-    Message type.
-  **/
-  var type : TypeEnum<Request<A>>;
-  // end ProtocolMessage implementation
-
+typedef Request = {
+  > ProtocolMessage,
+  var type : TypeEnum;
   /**
     The command to execute.
   **/
-  var command : RequestCommandEnum<A>;
-}
-
-@:forward abstract Request<A>(RequestArgs<A>) {
-  @:from inline public static function fromRunInTerminalRequest<A>(t:RunInTerminalRequest):Request<A> return cast t;
-  @:from inline public static function fromInitializeRequest<A>(t:InitializeRequest):Request<A> return cast t;
-  @:from inline public static function fromConfigurationDoneRequest<A>(t:ConfigurationDoneRequest):Request<A> return cast t;
-  @:from inline public static function fromLaunchRequest<A>(t:LaunchRequest):Request<A> return cast t;
-  @:from inline public static function fromAttachRequest<A>(t:AttachRequest):Request<A> return cast t;
-  @:from inline public static function fromRestartRequest<A>(t:RestartRequest):Request<A> return cast t;
-  @:from inline public static function fromDisconnectRequest<A>(t:DisconnectRequest):Request<A> return cast t;
-  @:from inline public static function fromSetBreakpointsRequest<A>(t:SetBreakpointsRequest):Request<A> return cast t;
-  @:from inline public static function fromSetFunctionBreakpointsRequest<A>(t:SetFunctionBreakpointsRequest):Request<A> return cast t;
-  @:from inline public static function fromSetExceptionBreakpointsRequest<A>(t:SetExceptionBreakpointsRequest):Request<A> return cast t;
-  @:from inline public static function fromContinueRequest<A>(t:ContinueRequest):Request<A> return cast t;
-  @:from inline public static function fromNextRequest<A>(t:NextRequest):Request<A> return cast t;
-  @:from inline public static function fromStepInRequest<A>(t:StepInRequest):Request<A> return cast t;
-  @:from inline public static function fromStepOutRequest<A>(t:StepOutRequest):Request<A> return cast t;
-  @:from inline public static function fromStepBackRequest<A>(t:StepBackRequest):Request<A> return cast t;
-  @:from inline public static function fromReverseContinueRequest<A>(t:ReverseContinueRequest):Request<A> return cast t;
-  @:from inline public static function fromRestartFrameRequest<A>(t:RestartFrameRequest):Request<A> return cast t;
-  @:from inline public static function fromGotoRequest<A>(t:GotoRequest):Request<A> return cast t;
-  @:from inline public static function fromPauseRequest<A>(t:PauseRequest):Request<A> return cast t;
-  @:from inline public static function fromStackTraceRequest<A>(t:StackTraceRequest):Request<A> return cast t;
-  @:from inline public static function fromScopesRequest<A>(t:ScopesRequest):Request<A> return cast t;
-  @:from inline public static function fromVariablesRequest<A>(t:VariablesRequest):Request<A> return cast t;
-  @:from inline public static function fromSetVariableRequest<A>(t:SetVariableRequest):Request<A> return cast t;
-  @:from inline public static function fromSourceRequest<A>(t:SourceRequest):Request<A> return cast t;
-  @:from inline public static function fromThreadsRequest<A>(t:ThreadsRequest):Request<A> return cast t;
-  @:from inline public static function fromModulesRequest<A>(t:ModulesRequest):Request<A> return cast t;
-  @:from inline public static function fromLoadedSourcesRequest<A>(t:LoadedSourcesRequest):Request<A> return cast t;
-  @:from inline public static function fromEvaluateRequest<A>(t:EvaluateRequest):Request<A> return cast t;
-  @:from inline public static function fromStepInTargetsRequest<A>(t:StepInTargetsRequest):Request<A> return cast t;
-  @:from inline public static function fromGotoTargetsRequest<A>(t:GotoTargetsRequest):Request<A> return cast t;
-  @:from inline public static function fromCompletionsRequest<A>(t:CompletionsRequest):Request<A> return cast t;
-  @:from inline public static function fromExceptionInfoRequest<A>(t:ExceptionInfoRequest):Request<A> return cast t;
-  @:from inline public static function fromRequest<A>(t:Request<Dynamic>):Request<A> return cast t;
-  @:from inline public static function fromEvent<A>(t:Event<Dynamic>):Request<A> return cast t;
-  @:from inline public static function fromResponse<A>(t:Response):Request<A> return cast t;
+  var command : RequestCommandEnum;
 }
 
 /**
   Server-initiated event.
 **/
-typedef EventArgs<A> = {
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  /**
-    Message type.
-  **/
-  var type : TypeEnum<Event<A>>;
-  // end ProtocolMessage implementation
-
+typedef Event = {
+  > ProtocolMessage,
+  var type : TypeEnum;
   /**
     Type of event.
   **/
-  var event : EventEnum<A>;
-}
-
-@:forward abstract Event<A>(EventArgs<A>) {
-  @:from inline public static function fromInitializedEvent<A>(t:InitializedEvent):Event<A> return cast t;
-  @:from inline public static function fromStoppedEvent<A>(t:StoppedEvent):Event<A> return cast t;
-  @:from inline public static function fromContinuedEvent<A>(t:ContinuedEvent):Event<A> return cast t;
-  @:from inline public static function fromExitedEvent<A>(t:ExitedEvent):Event<A> return cast t;
-  @:from inline public static function fromTerminatedEvent<A>(t:TerminatedEvent):Event<A> return cast t;
-  @:from inline public static function fromThreadEvent<A>(t:ThreadEvent):Event<A> return cast t;
-  @:from inline public static function fromOutputEvent<A>(t:OutputEvent):Event<A> return cast t;
-  @:from inline public static function fromBreakpointEvent<A>(t:BreakpointEvent):Event<A> return cast t;
-  @:from inline public static function fromModuleEvent<A>(t:ModuleEvent):Event<A> return cast t;
-  @:from inline public static function fromLoadedSourceEvent<A>(t:LoadedSourceEvent):Event<A> return cast t;
-  @:from inline public static function fromProcessEvent<A>(t:ProcessEvent):Event<A> return cast t;
-  @:from inline public static function fromRequest<A>(t:Request<Dynamic>):Event<A> return cast t;
-  @:from inline public static function fromEvent<A>(t:Event<Dynamic>):Event<A> return cast t;
-  @:from inline public static function fromResponse<A>(t:Response):Event<A> return cast t;
+  var event : EventEnum;
 }
 
 /**
   Response to a request.
 **/
 typedef Response = {
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  /**
-    Message type.
-  **/
-  var type : TypeEnum<Response>;
-  // end ProtocolMessage implementation
-
+  > ProtocolMessage,
+  var type : TypeEnum;
   /**
     Sequence number of the corresponding request.
   **/
@@ -280,21 +192,8 @@ typedef Response = {
   - frontend sends one ConfigurationDoneRequest to indicate the end of the configuration
 **/
 typedef InitializedEvent = {
-  // Event implementation
-  var type : TypeEnum<Event<Dynamic>>;
-  /**
-    Type of event.
-  **/
-  var event : EventEnum<InitializedEvent>;
-  // end Event implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Event,
+  var event : EventEnum;
 }
 
 /**
@@ -303,21 +202,8 @@ typedef InitializedEvent = {
   This can be caused by a break point previously set, a stepping action has completed, by executing a debugger statement etc.
 **/
 typedef StoppedEvent = {
-  // Event implementation
-  var type : TypeEnum<Event<Dynamic>>;
-  /**
-    Type of event.
-  **/
-  var event : EventEnum<StoppedEvent>;
-  // end Event implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Event,
+  var event : EventEnum;
   var body : {
     /**
       The reason for the event.
@@ -354,21 +240,8 @@ typedef StoppedEvent = {
   It is only necessary to send a ContinuedEvent if there was no previous request that implied this.
 **/
 typedef ContinuedEvent = {
-  // Event implementation
-  var type : TypeEnum<Event<Dynamic>>;
-  /**
-    Type of event.
-  **/
-  var event : EventEnum<ContinuedEvent>;
-  // end Event implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Event,
+  var event : EventEnum;
   var body : {
     /**
       The thread which was continued.
@@ -388,21 +261,8 @@ typedef ContinuedEvent = {
   The event indicates that the debuggee has exited.
 **/
 typedef ExitedEvent = {
-  // Event implementation
-  var type : TypeEnum<Event<Dynamic>>;
-  /**
-    Type of event.
-  **/
-  var event : EventEnum<ExitedEvent>;
-  // end Event implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Event,
+  var event : EventEnum;
   var body : {
     /**
       The exit code returned from the debuggee.
@@ -418,21 +278,8 @@ typedef ExitedEvent = {
   The event indicates that debugging of the debuggee has terminated.
 **/
 typedef TerminatedEvent = {
-  // Event implementation
-  var type : TypeEnum<Event<Dynamic>>;
-  /**
-    Type of event.
-  **/
-  var event : EventEnum<TerminatedEvent>;
-  // end Event implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Event,
+  var event : EventEnum;
   @:optional var body : {
     /**
       A debug adapter may set 'restart' to true (or to an arbitrary object) to request that the front end restarts the session.
@@ -449,21 +296,8 @@ typedef TerminatedEvent = {
   The event indicates that a thread has started or exited.
 **/
 typedef ThreadEvent = {
-  // Event implementation
-  var type : TypeEnum<Event<Dynamic>>;
-  /**
-    Type of event.
-  **/
-  var event : EventEnum<ThreadEvent>;
-  // end Event implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Event,
+  var event : EventEnum;
   var body : {
     /**
       The reason for the event.
@@ -483,21 +317,8 @@ typedef ThreadEvent = {
   The event indicates that the target has produced some output.
 **/
 typedef OutputEvent = {
-  // Event implementation
-  var type : TypeEnum<Event<Dynamic>>;
-  /**
-    Type of event.
-  **/
-  var event : EventEnum<OutputEvent>;
-  // end Event implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Event,
+  var event : EventEnum;
   var body : {
     /**
       The output category. If not specified, 'console' is assumed.
@@ -537,21 +358,8 @@ typedef OutputEvent = {
   The event indicates that some information about a breakpoint has changed.
 **/
 typedef BreakpointEvent = {
-  // Event implementation
-  var type : TypeEnum<Event<Dynamic>>;
-  /**
-    Type of event.
-  **/
-  var event : EventEnum<BreakpointEvent>;
-  // end Event implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Event,
+  var event : EventEnum;
   var body : {
     /**
       The reason for the event.
@@ -571,21 +379,8 @@ typedef BreakpointEvent = {
   The event indicates that some information about a module has changed.
 **/
 typedef ModuleEvent = {
-  // Event implementation
-  var type : TypeEnum<Event<Dynamic>>;
-  /**
-    Type of event.
-  **/
-  var event : EventEnum<ModuleEvent>;
-  // end Event implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Event,
+  var event : EventEnum;
   var body : {
     /**
       The reason for the event.
@@ -605,21 +400,8 @@ typedef ModuleEvent = {
   The event indicates that some source has been added, changed, or removed from the set of all loaded sources.
 **/
 typedef LoadedSourceEvent = {
-  // Event implementation
-  var type : TypeEnum<Event<Dynamic>>;
-  /**
-    Type of event.
-  **/
-  var event : EventEnum<LoadedSourceEvent>;
-  // end Event implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Event,
+  var event : EventEnum;
   var body : {
     /**
       The reason for the event.
@@ -639,21 +421,8 @@ typedef LoadedSourceEvent = {
   The event indicates that the debugger has begun debugging a new process. Either one that it has launched, or one that it has attached to.
 **/
 typedef ProcessEvent = {
-  // Event implementation
-  var type : TypeEnum<Event<Dynamic>>;
-  /**
-    Type of event.
-  **/
-  var event : EventEnum<ProcessEvent>;
-  // end Event implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Event,
+  var event : EventEnum;
   var body : {
     /**
       The logical name of the process. This is usually the full path to process's executable file. Example: /home/example/myproj/program.js.
@@ -681,21 +450,8 @@ typedef ProcessEvent = {
   With this request a debug adapter can run a command in a terminal.
 **/
 typedef RunInTerminalRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<RunInTerminalRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : RunInTerminalRequestArguments;
 }
 
@@ -762,21 +518,8 @@ typedef ErrorResponse = {
   Initialize request; value of command field is 'initialize'.
 **/
 typedef InitializeRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<InitializeRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : InitializeRequestArguments;
 }
 
@@ -834,21 +577,8 @@ typedef InitializeResponse = {
   The client of the debug protocol must send this request at the end of the sequence of configuration requests (which was started by the InitializedEvent).
 **/
 typedef ConfigurationDoneRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<ConfigurationDoneRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   @:optional var arguments : ConfigurationDoneArguments;
 }
 
@@ -870,21 +600,8 @@ typedef ConfigurationDoneResponse = {
   Launch request; value of command field is 'launch'.
 **/
 typedef LaunchRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<LaunchRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : LaunchRequestArguments;
 }
 
@@ -909,21 +626,8 @@ typedef LaunchResponse = {
   Attach request; value of command field is 'attach'.
 **/
 typedef AttachRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<AttachRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : AttachRequestArguments;
 }
 
@@ -949,21 +653,8 @@ typedef AttachResponse = {
   and setting the capability 'supportsRestartRequest' to true.
 **/
 typedef RestartRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<RestartRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   @:optional var arguments : RestartArguments;
 }
 
@@ -985,21 +676,8 @@ typedef RestartResponse = {
   Disconnect request; value of command field is 'disconnect'.
 **/
 typedef DisconnectRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<DisconnectRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   @:optional var arguments : DisconnectArguments;
 }
 
@@ -1029,21 +707,8 @@ typedef DisconnectResponse = {
   When a breakpoint is hit, a StoppedEvent (event type 'breakpoint') is generated.
 **/
 typedef SetBreakpointsRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<SetBreakpointsRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : SetBreakpointsArguments;
 }
 
@@ -1095,21 +760,8 @@ typedef SetBreakpointsResponse = {
   When a function breakpoint is hit, a StoppedEvent (event type 'function breakpoint') is generated.
 **/
 typedef SetFunctionBreakpointsRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<SetFunctionBreakpointsRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : SetFunctionBreakpointsArguments;
 }
 
@@ -1144,21 +796,8 @@ typedef SetFunctionBreakpointsResponse = {
   The request configures the debuggers response to thrown exceptions. If an exception is configured to break, a StoppedEvent is fired (event type 'exception').
 **/
 typedef SetExceptionBreakpointsRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<SetExceptionBreakpointsRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : SetExceptionBreakpointsArguments;
 }
 
@@ -1188,21 +827,8 @@ typedef SetExceptionBreakpointsResponse = {
   The request starts the debuggee to run again.
 **/
 typedef ContinueRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<ContinueRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : ContinueArguments;
 }
 
@@ -1237,21 +863,8 @@ typedef ContinueResponse = {
   The debug adapter first sends the NextResponse and then a StoppedEvent (event type 'step') after the step has completed.
 **/
 typedef NextRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<NextRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : NextArguments;
 }
 
@@ -1282,21 +895,8 @@ typedef NextResponse = {
   The list of possible targets for a given source line can be retrieved via the 'stepInTargets' request.
 **/
 typedef StepInRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<StepInRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : StepInArguments;
 }
 
@@ -1327,21 +927,8 @@ typedef StepInResponse = {
   The debug adapter first sends the StepOutResponse and then a StoppedEvent (event type 'step') after the step has completed.
 **/
 typedef StepOutRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<StepOutRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : StepOutArguments;
 }
 
@@ -1368,21 +955,8 @@ typedef StepOutResponse = {
   The debug adapter first sends the StepBackResponse and then a StoppedEvent (event type 'step') after the step has completed. Clients should only call this request if the capability supportsStepBack is true.
 **/
 typedef StepBackRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<StepBackRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : StepBackArguments;
 }
 
@@ -1408,21 +982,8 @@ typedef StepBackResponse = {
   The request starts the debuggee to run backward. Clients should only call this request if the capability supportsStepBack is true.
 **/
 typedef ReverseContinueRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<ReverseContinueRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : ReverseContinueArguments;
 }
 
@@ -1449,21 +1010,8 @@ typedef ReverseContinueResponse = {
   The debug adapter first sends the RestartFrameResponse and then a StoppedEvent (event type 'restart') after the restart has completed.
 **/
 typedef RestartFrameRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<RestartFrameRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : RestartFrameArguments;
 }
 
@@ -1492,21 +1040,8 @@ typedef RestartFrameResponse = {
   The debug adapter first sends the GotoResponse and then a StoppedEvent (event type 'goto').
 **/
 typedef GotoRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<GotoRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : GotoArguments;
 }
 
@@ -1537,21 +1072,8 @@ typedef GotoResponse = {
   The debug adapter first sends the PauseResponse and then a StoppedEvent (event type 'pause') after the thread has been paused successfully.
 **/
 typedef PauseRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<PauseRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : PauseArguments;
 }
 
@@ -1576,21 +1098,8 @@ typedef PauseResponse = {
   StackTrace request; value of command field is 'stackTrace'. The request returns a stacktrace from the current execution state.
 **/
 typedef StackTraceRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<StackTraceRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : StackTraceArguments;
 }
 
@@ -1641,21 +1150,8 @@ typedef StackTraceResponse = {
   The request returns the variable scopes for a given stackframe ID.
 **/
 typedef ScopesRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<ScopesRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : ScopesArguments;
 }
 
@@ -1690,21 +1186,8 @@ typedef ScopesResponse = {
   An optional filter can be used to limit the fetched children to either named or indexed children.
 **/
 typedef VariablesRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<VariablesRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : VariablesArguments;
 }
 
@@ -1754,21 +1237,8 @@ typedef VariablesResponse = {
   Set the variable with the given name in the variable container to a new value.
 **/
 typedef SetVariableRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<SetVariableRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : SetVariableArguments;
 }
 
@@ -1807,7 +1277,7 @@ typedef SetVariableResponse = {
     /**
       The type of the new value. Typically shown in the UI when hovering over the value.
     **/
-    @:optional var type : TypeEnum<SetVariableResponse>;
+    @:optional var type : TypeEnum;
     /**
       If variablesReference is > 0, the new value is structured and its children can be retrieved by passing variablesReference to the VariablesRequest.
     **/
@@ -1832,21 +1302,8 @@ typedef SetVariableResponse = {
   The request retrieves the source code for a given source reference.
 **/
 typedef SourceRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<SourceRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : SourceArguments;
 }
 
@@ -1888,21 +1345,8 @@ typedef SourceResponse = {
   The request retrieves a list of all threads.
 **/
 typedef ThreadsRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<ThreadsRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
 }
 
 /**
@@ -1924,21 +1368,8 @@ typedef ThreadsResponse = {
   Modules can be retrieved from the debug adapter with the ModulesRequest which can either return all modules or a range of modules to support paging.
 **/
 typedef ModulesRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<ModulesRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : ModulesArguments;
 }
 
@@ -1979,21 +1410,8 @@ typedef ModulesResponse = {
   Retrieves the set of all sources currently loaded by the debugged process.
 **/
 typedef LoadedSourcesRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<LoadedSourcesRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   @:optional var arguments : LoadedSourcesArguments;
 }
 
@@ -2025,21 +1443,8 @@ typedef LoadedSourcesResponse = {
   The expression has access to any variables and arguments that are in scope.
 **/
 typedef EvaluateRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<EvaluateRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : EvaluateArguments;
 }
 
@@ -2078,7 +1483,7 @@ typedef EvaluateResponse = {
     /**
       The optional type of the evaluate result.
     **/
-    @:optional var type : TypeEnum<EvaluateResponse>;
+    @:optional var type : TypeEnum;
     /**
       Properties of a evaluate result that can be used to determine how to render the result in the UI.
     **/
@@ -2109,21 +1514,8 @@ typedef EvaluateResponse = {
   The StepInTargets may only be called if the 'supportsStepInTargetsRequest' capability exists and is true.
 **/
 typedef StepInTargetsRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<StepInTargetsRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : StepInTargetsArguments;
 }
 
@@ -2159,21 +1551,8 @@ typedef StepInTargetsResponse = {
   The GotoTargets request may only be called if the 'supportsGotoTargetsRequest' capability exists and is true.
 **/
 typedef GotoTargetsRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<GotoTargetsRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : GotoTargetsArguments;
 }
 
@@ -2216,21 +1595,8 @@ typedef GotoTargetsResponse = {
   The CompletionsRequest may only be called if the 'supportsCompletionsRequest' capability exists and is true.
 **/
 typedef CompletionsRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<CompletionsRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : CompletionsArguments;
 }
 
@@ -2276,21 +1642,8 @@ typedef CompletionsResponse = {
   Retrieves the details of the exception that caused the StoppedEvent to be raised.
 **/
 typedef ExceptionInfoRequest = {
-  // Request implementation
-  var type : TypeEnum<Request<Dynamic>>;
-  /**
-    The command to execute.
-  **/
-  var command : RequestCommandEnum<ExceptionInfoRequest>;
-  // end Request implementation
-
-  // ProtocolMessage implementation
-  /**
-    Sequence number.
-  **/
-  var seq : Int;
-  // end ProtocolMessage implementation
-
+  > Request,
+  var command : RequestCommandEnum;
   var arguments : ExceptionInfoArguments;
 }
 
@@ -2553,7 +1906,7 @@ typedef ColumnDescriptor = {
   /**
     Datatype of values in this column.  Defaults to 'string' if not specified.
   **/
-  @:optional var type : TypeEnum<ColumnDescriptor>;
+  @:optional var type : TypeEnum;
   /**
     Width of this column in characters (hint only).
   **/
@@ -2730,7 +2083,7 @@ typedef Variable = {
   /**
     The type of the variable's value. Typically shown in the UI when hovering over the value.
   **/
-  @:optional var type : TypeEnum<Variable>;
+  @:optional var type : TypeEnum;
   /**
     Properties of a variable that can be used to determine how to render the variable in the UI.
   **/

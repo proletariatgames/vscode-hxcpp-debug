@@ -9,9 +9,12 @@ typedef Settings = {
 typedef LaunchSettings = {
     > Settings,
     ?compile: {
-        ?path:String,
-        command:String
+        ?cwd:String,
+        ?args:Array<String>
     },
-    ?runPath:String,
-    runCommand:String
+    run: {
+        ?cwd:String,
+        args:Array<String>
+    },
+    ?port:Int,
 }

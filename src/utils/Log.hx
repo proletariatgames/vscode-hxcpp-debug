@@ -32,7 +32,7 @@ class Log {
                     output: piece + '\n',
                 }
             };
-            Globals.add_stdout(ProtocolMessage.fromEvent(data));
+            Globals.add_stdout(data);
         }
     }
 

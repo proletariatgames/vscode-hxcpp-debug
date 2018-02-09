@@ -25,7 +25,6 @@ import debugger.IController;
 import vscode.debugger.Data;
 
 typedef DirtyFlag = Bool;
-typedef Tag<T> = { command: RequestCommandEnum<T> };
 
 class Main {
   static function main() {
@@ -70,6 +69,88 @@ class MyDebugAdapter {
     // if (args.supportsRunInTerminalRequest)
     Globals.add_response_to(initialize, true);
 
+    var launchOrAttach = Globals.get_next_stdin(true);
+    switch(launchOrAttach.command) {
+      case Launch:
+        var launch:LaunchRequest = cast launchOrAttach;
+        // launch.arguments.noDebug
+        var settings = Globals.get_settings();
+        for (field in Reflect.fields(launch.arguments)) {
+          var curField = Reflect.field(settings, field);
+          if (curField == null) {
+            Reflect.setField(settings, field, Reflect.field(launch.arguments, field));
+          }
+        }
+
+        // compile
+        function change_terminal_args(args:Array<String>) {
+          if (Sys.systemName() == "Windows") {
+            return ["cmd","/C", '"' + args.join('" "') +'" || exit 1'];
+          } else {
+            return args;
+          }
+        }
+        var curSettings:utils.Settings.LaunchSettings = cast settings;
+        if (curSettings.compile != null && curSettings.compile.args != null) {
+          // call_terminal(curSettings.compile.path, curSettings.compile.command, true);
+          var ret = Globals.add_request_wait( ({
+            seq: 0,
+            type: Request,
+            command: RunInTerminal,
+            arguments: {
+              title: "Compilation",
+              cwd: curSettings.compile.cwd == null ? "${workspaceRoot}" : curSettings.compile.cwd,
+              args: change_terminal_args(curSettings.compile.args),
+            }
+          } : RunInTerminalRequest));
+          if (!ret.success) {
+            Log.error('Error while compiling: ${ret.message}');
+            Globals.terminate(1);
+          }
+        }
+
+        // run
+        if (curSettings.run == null) {
+          Log.log('Terminating: There is nothing to run');
+          Globals.terminate(0);
+        }
+        var port = curSettings.port;
+        if (port == null) {
+          port = 6972;
+        }
+        var envs:haxe.DynamicAccess<String> = {
+          HXCPP_DEBUG: "true"
+        };
+        if (port < 0) {
+          Log.verbose('Finding a random port');
+          port = find_random_port();
+          Log.verbose('Port found at $port');
+          envs["HXCPP_DEBUGGER_PORT"] = port + "";
+        }
+
+        Globals.add_request( ({
+          seq: 0,
+          type: Request,
+          command: RunInTerminal,
+          arguments: {
+            title: "Program",
+            cwd: curSettings.run.cwd == null ? "${workspaceRoot}" : curSettings.run.cwd,
+            args: change_terminal_args(curSettings.run.args),
+            env: cast envs
+          }
+        } : RunInTerminalRequest), function(res) {
+          if (res.message != null) {
+            Log.log('Command output: ${res.message}');
+          }
+          Globals.terminate(res.success ? 0 : 1);
+        });
+
+      case Attach:
+        var attach:AttachRequest = cast launchOrAttach;
+        Log.fatal('TODO: Attach');
+      case _:
+        Log.fatal('protocol error: Expected "launch" or "attach", but got $launchOrAttach');
+    }
     // test( (cast Globals.get_next_stdin(true) : { command:RequestCommandEnum<Dynamic> })) ;
     // var launchOrAttach = Globals.get_next_stdin(true);
     // Globals.get_next_stdin(true).doRequestCommand(function(launchOrAttach) {
@@ -85,7 +166,6 @@ class MyDebugAdapter {
     //   case Attach:
     //     var attach:AttachRequest = cast launchOrAttach;
     //   case _:
-    //     Log.fatal('protocol error: Expected "launch" or "attach", but got $launchOrAttach');
     // }
     // Globals.get_next_stdin(true).doRequestCommand(function(launchOrAttach) {
     //   // switch (launchOrAttach.command) {
@@ -110,13 +190,14 @@ class MyDebugAdapter {
     Log.error('OUTTAHERE');
   }
 
-  static function test<T : Tag<T>>(t:T) {
-      switch (t.command) {
-        case Launch:
-        case Attach:
-        case _:
-      }
+  private static function find_random_port() {
+    //TODO actually test the port
+    return Std.random(5000) + 1024;
   }
+
+  // private function call_terminal(cwd:String, path:String, wait:Bool) {
+  //   // Globals.add_event();
+  // }
 
   private function start_output_thread() {
     var settings = Globals.get_settings();

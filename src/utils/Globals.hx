@@ -1,6 +1,7 @@
 package utils;
 import cpp.vm.Deque;
 import threads.StdoutProcessor;
+import vscode.debugger.Data;
 
 class Globals {
     @:allow(threads.StdoutProcessor) static var stdout(default, null):Deque<String> = new Deque();
@@ -19,22 +20,66 @@ class Globals {
         Sys.exit(code);
     }
 
+    public static function terminate(code:Int) {
+        add_event( ({
+            seq: 0,
+            type: Event,
+            event: Exited,
+            body: { exitCode: code }
+        } : ExitedEvent) );
+        exit(code);
+    }
+
     @:allow(threads) static var exit_deque:Deque<Bool> = new Deque();
 
-    public static function add_stdout<T>(output:vscode.debugger.Data.ProtocolMessage<T>) {
+    public static function add_stdout(output:ProtocolMessage) {
         output.seq = cpp.AtomicInt.atomicInc(cpp.Pointer.addressOf(seq));
         stdout.add(haxe.Json.stringify(output));
         return output.seq;
     }
 
-    public static function add_event<T>(output:vscode.debugger.Data.Event<T>) {
+    public static function add_event(output:Event) {
         output.seq = cpp.AtomicInt.atomicInc(cpp.Pointer.addressOf(seq));
         stdout.add(haxe.Json.stringify(output));
         return output.seq;
     }
 
-    public static function add_response_to(req:vscode.debugger.Data.Request<Dynamic>, success:Bool, ?message:String) {
-        var out:vscode.debugger.Data.Response = {
+    private static var responses:Map<Int, Response->Void> = new Map();
+    private static var responses_mutex:cpp.vm.Mutex = new cpp.vm.Mutex();
+
+    public static function get_response_for_seq(seq:Int):Null<Response->Void> {
+        var ret = null;
+        responses_mutex.acquire();
+        ret = responses[seq];
+        if (ret != null) {
+            responses.remove(seq);
+        }
+        responses_mutex.release();
+
+        return ret;
+    }
+
+    public static function add_request_wait(output:Request) {
+        var lock = new cpp.vm.Lock();
+        var ret = null;
+        add_request(output, function(r) { ret = r; lock.release(); });
+        lock.wait();
+        return ret;
+    }
+
+    public static function add_request(output:Request, ?cb:Response->Void) {
+        output.seq = cpp.AtomicInt.atomicInc(cpp.Pointer.addressOf(seq));
+        if (cb != null) {
+            responses_mutex.acquire();
+            responses[output.seq] = cb;
+            responses_mutex.release();
+        }
+        stdout.add(haxe.Json.stringify(output));
+        return output.seq;
+    }
+
+    public static function add_response_to(req:Request, success:Bool, ?message:String) {
+        var out:Response = {
             seq: cpp.AtomicInt.atomicInc(cpp.Pointer.addressOf(seq)),
             type: Response,
             request_seq: req.seq,
@@ -50,7 +95,7 @@ class Globals {
 
     @:allow(threads.StdinProcessor) static var stdin(default, null):Deque<Dynamic> = new Deque();
 
-    public static function get_next_stdin<T>(block:Bool):vscode.debugger.Data.Request<T> {
+    public static function get_next_stdin(block:Bool):Request {
         return stdin.pop(block);
     }
 

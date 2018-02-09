@@ -2,6 +2,7 @@ package threads;
 using StringTools;
 import utils.Globals;
 import utils.Log.*;
+import vscode.debugger.Data;
 
 class StdinProcessor {
     public static function spawn_thread() {
@@ -41,7 +42,24 @@ class StdinProcessor {
                     //     error('Debugger Input: Expected two blank lines after headers! Got "$tmp" instead');
                     //     continue;
                     // }
-                    stdin.add(haxe.Json.parse(input.readString(len)));
+                    var msg:vscode.debugger.Data.ProtocolMessage = haxe.Json.parse(input.readString(len));
+                    if (msg.type == Response) {
+                        var resp:Response = cast msg;
+                        msg = null;
+                        var cb = Globals.get_response_for_seq(resp.request_seq);
+                        if (cb != null) {
+                            try {
+                                cb(resp);
+                            }
+                            catch(e:Dynamic) {
+                                utils.Log.error('Internal debugger error while calling callback for $resp: $e');
+                                utils.Log.verbose(haxe.CallStack.toString(haxe.CallStack.exceptionStack()));
+                            }
+                        }
+                    }
+                    if (msg != null) {
+                        stdin.add(msg);
+                    }
                     if (wrapped != null) {
                         Globals.record_io(true, wrapped.getBuf());
                     }
@@ -53,6 +71,7 @@ class StdinProcessor {
                 }
                 catch(e:Dynamic) {
                     utils.Log.error('Internal Debugger Error: Error on stdin thread: $e');
+                    utils.Log.verbose(haxe.CallStack.toString(haxe.CallStack.exceptionStack()));
                 }
             }
         });

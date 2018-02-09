@@ -23,6 +23,7 @@ class StdoutProcessor {
                     stdoutOutput.flush();
                 } catch(e:Dynamic) {
                     utils.Log.error('Internal Debugger Error: Error on stdout thread: $e');
+                    utils.Log.verbose(haxe.CallStack.toString(haxe.CallStack.exceptionStack()));
                 }
             }
             Globals.exit_deque.push(true);
