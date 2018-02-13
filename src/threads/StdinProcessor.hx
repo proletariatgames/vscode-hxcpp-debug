@@ -17,7 +17,7 @@ class StdinProcessor {
                 wrapped = new InputHelper(input);
                 input = wrapped;
             }
-            var stdin = Globals.stdin;
+            var inputs = Globals.inputs;
             while (true) {
                 try {
                     var len = 0;
@@ -48,25 +48,38 @@ class StdinProcessor {
                         msg = null;
                         var cb = Globals.get_response_for_seq(resp.request_seq);
                         if (cb != null) {
-                            try {
-                                cb(resp);
-                            }
-                            catch(e:Dynamic) {
-                                utils.Log.error('Internal debugger error while calling callback for $resp: $e');
-                                utils.Log.verbose(haxe.CallStack.toString(haxe.CallStack.exceptionStack()));
-                            }
+                            Globals.add_worker_fn(function()
+                                try {
+                                    cb(resp);
+                                }
+                                catch(e:Dynamic) {
+                                    utils.Log.error('Internal debugger error while calling callback for $resp: $e');
+                                    utils.Log.verbose(haxe.CallStack.toString(haxe.CallStack.exceptionStack()));
+                                }
+                            );
                         }
                     }
                     if (msg != null) {
-                        stdin.add(msg);
+                        inputs.add(utils.InputData.VSCodeRequest(msg));
+                        // stdin.add(msg);
                     }
                     if (wrapped != null) {
                         Globals.record_io(true, wrapped.getBuf());
                     }
                 } 
+                catch(e:haxe.io.Error) {
+                    switch(e) {
+                        case Custom(e) if (Std.is(e, haxe.io.Eof)):
+                            // input closed
+                            inputs.push(null);
+                            break;
+                        case _:
+                            utils.Log.error('Internal Debugger Error: Error on stdin thread: $e');
+                    }
+                }
                 catch(e:haxe.io.Eof) {
                     // input closed
-                    stdin.push(null);
+                    inputs.push(null);
                     break;
                 }
                 catch(e:Dynamic) {

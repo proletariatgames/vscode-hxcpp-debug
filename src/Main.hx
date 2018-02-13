@@ -24,6 +24,9 @@ import debugger.IController;
 
 import vscode.debugger.Data;
 
+using Lambda;
+using StringTools;
+
 typedef DirtyFlag = Bool;
 
 class Main {
@@ -43,156 +46,568 @@ class Main {
     //   input = sys.io.File.read(Sys.args()[0], true);
     // }
     // new DebugAdapter(input, Sys.stdout(), log);
-    new MyDebugAdapter().loop();
+    try {
+      new MyDebugAdapter().loop();
+    } catch(e:Dynamic) {
+      Log.fatal('Debugger: Error on main thread: $e');
+    }
   }
 }
 
 class MyDebugAdapter {
-  var output_thread_started:Bool;
+
+  var _output_thread_started:Bool;
+  var _context:DebugContext;
+
   public function new() {
+    this._context = new DebugContext();
     // threads.Recorder.
     if (Globals.get_settings().debugOutput != null) {
       start_output_thread();
     }
     threads.StdinProcessor.spawn_thread();
     threads.StdoutProcessor.spawn_thread();
+    threads.Worker.create_workers(5);
   }
 
   public function loop() {
     Log.log('Starting');
-    Log.warn('Wraning');
-    var initialize:InitializeRequest = cast Globals.get_next_stdin(true);
+    var initialize:InitializeRequest = switch(Globals.get_next_input(true)) {
+      case VSCodeRequest(req):
+        cast req;
+      case _: throw 'assert'; // should never happen
+    };
     if (initialize.command != Initialize) {
       Log.fatal('vscode debugger protocol error: Expected a initialize request, got $initialize');
     }
-    var args = initialize.arguments;
-    // if (args.supportsRunInTerminalRequest)
-    Globals.add_response_to(initialize, true);
+    var resp:{ >Response, body:Capabilities } = {
+      seq: 0,
+      type: Response,
+      request_seq: initialize.seq,
+      command: Std.string(initialize.command),
+      success: true,
+      body: {
+        supportsConfigurationDoneRequest: true,
+        supportsFunctionBreakpoints: true,
+        supportsConditionalBreakpoints: true,
+        supportsEvaluateForHovers: true,
+        supportsStepBack: false,
+        supportsSetVariable: true,
+        supportsStepInTargetsRequest: true,
+        supportsCompletionsRequest: false, // TODO
+        supportsRestartRequest: true,
+        supportTerminateDebuggee: true,
+        supportsLoadedSourcesRequest: true
+      }
+    };
+    Globals.add_response(initialize, resp);
 
-    var launchOrAttach = Globals.get_next_stdin(true);
-    switch(launchOrAttach.command) {
-      case Launch:
-        var launch:LaunchRequest = cast launchOrAttach;
-        // launch.arguments.noDebug
-        var settings = Globals.get_settings();
-        for (field in Reflect.fields(launch.arguments)) {
-          var curField = Reflect.field(settings, field);
-          if (curField == null) {
-            Reflect.setField(settings, field, Reflect.field(launch.arguments, field));
-          }
-        }
+    var launch_or_attach:Request = switch(Globals.get_next_input(true)) {
+      case VSCodeRequest(req):
+        cast req;
+      case _: throw 'assert'; // should never happen
+    };
 
-        // compile
-        function change_terminal_args(args:Array<String>) {
-          if (Sys.systemName() == "Windows") {
-            return ["cmd","/C", '"' + args.join('" "') +'" || exit 1'];
-          } else {
-            return args;
-          }
-        }
-        var curSettings:utils.Settings.LaunchSettings = cast settings;
-        if (curSettings.compile != null && curSettings.compile.args != null) {
-          // call_terminal(curSettings.compile.path, curSettings.compile.command, true);
-          var ret = Globals.add_request_wait( ({
-            seq: 0,
-            type: Request,
-            command: RunInTerminal,
-            arguments: {
-              title: "Compilation",
-              cwd: curSettings.compile.cwd == null ? "${workspaceRoot}" : curSettings.compile.cwd,
-              args: change_terminal_args(curSettings.compile.args),
-            }
-          } : RunInTerminalRequest));
-          if (!ret.success) {
-            Log.error('Error while compiling: ${ret.message}');
-            Globals.terminate(1);
-          }
-        }
-
-        // run
-        if (curSettings.run == null) {
-          Log.log('Terminating: There is nothing to run');
-          Globals.terminate(0);
-        }
-        var port = curSettings.port;
-        if (port == null) {
-          port = 6972;
-        }
-        var envs:haxe.DynamicAccess<String> = {
-          HXCPP_DEBUG: "true"
-        };
-        if (port < 0) {
-          Log.verbose('Finding a random port');
-          port = find_random_port();
-          Log.verbose('Port found at $port');
-          envs["HXCPP_DEBUGGER_PORT"] = port + "";
-        }
-
-        Globals.add_request( ({
-          seq: 0,
-          type: Request,
-          command: RunInTerminal,
-          arguments: {
-            title: "Program",
-            cwd: curSettings.run.cwd == null ? "${workspaceRoot}" : curSettings.run.cwd,
-            args: change_terminal_args(curSettings.run.args),
-            env: cast envs
-          }
-        } : RunInTerminalRequest), function(res) {
-          if (res.message != null) {
-            Log.log('Command output: ${res.message}');
-          }
-          Globals.terminate(res.success ? 0 : 1);
-        });
-
-      case Attach:
-        var attach:AttachRequest = cast launchOrAttach;
-        Log.fatal('TODO: Attach');
-      case _:
-        Log.fatal('protocol error: Expected "launch" or "attach", but got $launchOrAttach');
+    var port = this.launch_or_attach(launch_or_attach);
+    var settings = Globals.get_settings();
+    var host = 'localhost';
+    if (settings.host != null) {
+      host = settings.host;
     }
-    // test( (cast Globals.get_next_stdin(true) : { command:RequestCommandEnum<Dynamic> })) ;
-    // var launchOrAttach = Globals.get_next_stdin(true);
-    // Globals.get_next_stdin(true).doRequestCommand(function(launchOrAttach) {
-    //   switch (launchOrAttach.command) {
-    //     case Launch:
-    //     case Attach:
-    //     case _:
-    //   }
-    // });
-    // switch(launchOrAttach.command) {
-    //   case Launch:
-    //     var launch:LaunchRequest = cast launchOrAttach;
-    //   case Attach:
-    //     var attach:AttachRequest = cast launchOrAttach;
-    //   case _:
-    // }
-    // Globals.get_next_stdin(true).doRequestCommand(function(launchOrAttach) {
-    //   // switch (launchOrAttach.command) {
-    //   //   case Launch:
-    //   //   case Attach:
-    //   //   case _:
-    //   //     Log.fatal('protocol error: Expected "launch" or "attach", but got $launchOrAttach');
-    //   // }
-    // });
 
-    // Globals.add_stdout(({
-    //     type: Event,
-    //     event: Initialized,
-    //     seq: 0,
-    // } : Event<InitializedEvent>));
-    // var launchOrAttach:Request<Dynamic> = Globals.get_next_stdin(true);
+    threads.DebugConnector.connect_and_create_threads(host, port, settings.timeout);
 
-    // while(true) {
-    //   // var req:Request<Dynamic> = Globals.
-    // }
+    setup_internal_breakpoints();
+
+    Globals.add_event( ({
+      seq: 0,
+      type: Event,
+      event: Initialized,
+    } : InitializedEvent) );
+
+    // setup the internal breakpoints
+    // first of all, query the source files
+    _context.query_source_files();
+    var first_break = true,
+        configuration_done = false,
+        after_configuration_done = [];
+
+    while(true) {
+      var input = Globals.get_next_input(true);
+      if (input == null) {
+        break;
+      }
+      switch (input) {
+      case Callback(fn):
+        fn();
+      case DebuggerInterrupt(dbg):
+        switch(dbg) {
+        case ThreadCreated(thread_number):
+          if (!configuration_done) {
+            after_configuration_done.push(input);
+          } else {
+          }
+        case ThreadTerminated(thread_number):
+          if (!configuration_done) {
+            after_configuration_done.push(input);
+          } else {
+          }
+        case ThreadStarted(thread_number):
+          if (!configuration_done) {
+            after_configuration_done.push(input);
+          } else {
+          }
+        case ThreadStopped(thread_number, stack_frame, cls_name, fn_name, file_name, ln_num):
+          if (!configuration_done) {
+            Log.verbose('Thread stopped but initial threads answer was still not sent');
+            after_configuration_done.push(input);
+          } else {
+            Log.verbose('ThreadStopped($thread_number) $cls_name::$fn_name');
+            // get thread stopped reason
+            if (first_break) {
+              first_break = false;
+              Globals.add_event(( {
+                seq: 0,
+                type: Event,
+                event: Stopped,
+                body: {
+                  reason: Entry,
+                  threadId: thread_number,
+                  allThreadsStopped: true
+                }
+              } : StoppedEvent));
+            } else {
+              emit_thread_stopped(thread_number, stack_frame, cls_name, fn_name, file_name, ln_num);
+            }
+          }
+        case unexpected:
+          Log.warn('Debugger: Unexpected debugger interrupt $unexpected');
+        }
+      case VSCodeRequest(req):
+        switch(req.type) {
+        case Request:
+          var req:Request = cast req;
+          switch (req.command) {
+          case Restart:
+          case Disconnect:
+          case SetBreakpoints:
+            _context.breakpoints.vscode_set_breakpoints(cast req);
+          case SetFunctionBreakpoints:
+            _context.breakpoints.vscode_set_fn_breakpoints(cast req);
+          case Continue:
+            call_and_respond(req, Continue(1));
+          case Next:
+            call_and_respond(req, Next(1));
+          case StepIn:
+            call_and_respond(req, Step(1));
+          case StepOut:
+            call_and_respond(req, Finish(1));
+          case StepBack:
+            call_and_respond(req, Finish(1));
+          // case Goto:
+          case Pause:
+            call_and_respond(req, BreakNow);
+          case StackTrace:
+            respond_stack_trace(cast req);
+          case Scopes:
+          case Variables:
+          case SetVariable:
+          case Source:
+          case Threads:
+            respond_threads(req);
+          case Modules:
+          case LoadedSources:
+          case Evaluate:
+          case StepInTargets:
+          case GotoTargets:
+          case ExceptionInfo:
+          case ConfigurationDone:
+            Log.verbose('Configuration Done');
+            Globals.add_response_to(req, true);
+            configuration_done = true;
+            for (input in after_configuration_done) {
+              Globals.add_back_input(input);
+            }
+          case unsupported:
+            Log.warn('Debugger: Unsupported command ${req.command}');
+          }
+        case Event:
+          var ev:Event = cast req;
+          switch (ev.event) {
+          // case Stopped:
+          case unsupported:
+            Log.warn('Debugger: Unsupported event ${ev.event}');
+          }
+        case unexpected:
+          Log.warn('Debugger: Unexpected vscode request type $unexpected');
+        }
+      }
+    }
+
     Sys.sleep(25);
-    Log.error('OUTTAHERE');
   }
 
-  private static function find_random_port() {
-    //TODO actually test the port
-    return Std.random(5000) + 1024;
+  private function call_and_respond(req:Request, cmd:debugger.IController.Command, ?reset_cache:Bool=true) {
+    Globals.add_debugger_command(cmd, function(res) {
+      switch(res) {
+      case OK:
+        if (reset_cache) {
+          _context.thread_cache.reset();
+        }
+        Globals.add_response_to(req, true);
+      case ErrorCurrentThreadNotStopped(num):
+        Globals.add_response_to(req, false, 'Error while executing $cmd: Current thread ($num) is not stopped');
+      case unexpected:
+        Globals.add_response_to(req, false, 'Unexpected response to $cmd: $unexpected');
+      }
+    });
+  }
+
+  private function respond_stack_trace(req:StackTraceRequest) {
+    var thread_id = req.arguments.threadId;
+    _context.thread_cache.get_thread_info(thread_id, function(msg) {
+      var ret:Array<StackFrame> = [];
+      switch (msg) {
+        case ThreadsWhere(list):
+          switch(list) {
+          case Terminator:
+            Globals.add_response_to(req, false, 'Unexpected ThreadsWehre response: Terminator');
+            return;
+          case Where(num, status, frame_list, next):
+            Log.assert(num == thread_id, 'Requested $thread_id - got $num');
+            var frame_list = frame_list;
+            while (true) {
+              switch (frame_list) {
+              case Terminator: break;
+              case Frame(is_current, number, class_name, fn_name, file_name, ln_num, next):
+                if (number > 0xFFFF) {
+                  Log.error('Frame number $number overflow');
+                }
+                ret.push({
+                  id: (thread_id << 16) | (number & 0xFFFF),
+                  name: class_name + '.' + fn_name,
+                  source: {
+                    name: file_name,
+                    path: _context.source_files.resolve_source_path(file_name),
+                  },
+                  line: ln_num,
+                  column: 0,
+                });
+                frame_list = next;
+              }
+            }
+          }
+          Globals.add_response(req, ({
+            seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+            success: true,
+            body: {
+              stackFrames: ret
+            }
+          } : StackTraceResponse));
+        case ErrorCurrentThreadNotStopped(_):
+          Globals.add_response_to(req, false, 'Thread $thread_id is not stopped');
+          return;
+        case unexpected:
+          Globals.add_response_to(req, false, 'Unexpected response when getting current thread location: $unexpected');
+          return;
+      }
+    });
+  }
+
+  private function respond_threads(req:Request, ?cb:Void->Void) {
+    _context.thread_cache.get_threads_where(function (msg) {
+      var ret:Array<Thread> = [];
+      switch (msg) {
+      case ThreadsWhere(list):
+        var list = list;
+        while (true) {
+          switch(list) {
+          case Terminator:
+            break;
+          case Where(num, status, frame_list, next):
+            ret.push({ id: num, name: 'Thread #$num' });
+            list = next;
+          }
+        }
+      case unexpected:
+        Log.error('Debugger: Unexpected response to WhereAllThreads: $unexpected');
+        Globals.add_response_to(req, false, 'Unexpected debugger response $unexpected');
+        if (cb != null) Globals.add_main_thread_callback(cb);
+        return;
+      }
+      Globals.add_response(req, ({
+        seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+        success: true,
+        body: {
+          threads: ret
+        }
+      } : ThreadsResponse));
+      if (cb != null) Globals.add_main_thread_callback(cb);
+    });
+  }
+
+  private function emit_thread_stopped(thread_number : Int, stack_frame : Int,
+                                      class_name : String, function_name : String,
+                                      file_name : String, line_number : Int)
+  {
+    // get reason
+    _context.thread_cache.reset();
+    _context.thread_cache.get_thread_info(thread_number, function(msg) {
+      var thread_status = null;
+      switch(msg) {
+      case ThreadsWhere(list):
+        var list = list;
+        while(true) {
+          switch (list) {
+            case Terminator:
+              break;
+            case Where(num, status, frame_list, next):
+              if (num == thread_number) {
+                thread_status = status;
+                break;
+              }
+              Log.warn('WhereCurrentThread did not return the current stopped thread ($num != $thread_number)');
+              list = next;
+          }
+        }
+      case unexpected:
+        Log.error('Unexpected ThreadsWhere response: $unexpected');
+      }
+      if (thread_status == null) {
+        Log.fatal('Error while checking break reason for thread $thread_number ($file_name : $line_number)');
+      }
+
+      var should_break = true,
+          msg = null,
+          reason:StoppedReason = null;
+      switch (thread_status) {
+      case Running:
+        Log.error('Unexpected thread status Running');
+      case StoppedImmediate:
+        reason = Pause;
+      case StoppedBreakpoint(bp_num):
+        var bp = _context.breakpoints.get_breakpoint_from_hxcpp(bp_num);
+        switch(bp.on_break) {
+        case Internal(fn):
+          fn();
+          should_break = false;
+          return;
+        case Conditional(expr):
+          switch (Globals.add_debugger_command_sync(PrintExpression(false, expr))) {
+          case Value(_, type, value):
+            if (type != 'Bool') {
+              msg = 'This conditional breakpoint did not return a Bool. It returned $type';
+              Log.error('The condition `$expr` on breakpoint $bp_num did not return a Bool. It returned a $type. Breaking');
+            } else if (value != "true") {
+              should_break = false;
+            }
+          case ErrorEvaluatingExpression(details):
+            Log.error('Error while evaluating condition `$expr`: $details');
+            msg = 'The breakpoint condition returned an error: $details';
+          case _:
+          }
+        case Normal:
+        }
+      case StoppedUncaughtException:
+        reason = Exception;
+      case StoppedCriticalError(description):
+        reason = Exception;
+        msg = 'Stopped because of a critical error: $description';
+      }
+
+      if (should_break) {
+        Globals.add_event(( {
+          seq: 0,
+          type: Event,
+          event: Stopped,
+          body: {
+            reason: reason,
+            threadId: thread_number,
+            allThreadsStopped: true,
+            text: msg
+          }
+        } : StoppedEvent));
+      }
+    });
+  }
+
+  private function launch_or_attach(launch_or_attach:Request) {
+    var port = -1,
+        host = 'localhost';
+    switch(launch_or_attach.command) {
+    case Launch:
+      var launch:LaunchRequest = cast launch_or_attach;
+      // launch.arguments.noDebug
+      var settings = Globals.get_settings();
+      for (field in Reflect.fields(launch.arguments)) {
+        var curField = Reflect.field(settings, field);
+        if (curField == null) {
+          Reflect.setField(settings, field, Reflect.field(launch.arguments, field));
+        }
+      }
+      start_output_thread();
+
+      // compile
+      function change_terminal_args(args:Array<String>) {
+        if (Sys.systemName() == "Windows") {
+          return ["cmd","/C", '"' + args.join('" "') +'" || exit 1'];
+        } else {
+          return args;
+        }
+      }
+      var curSettings:utils.Settings.LaunchSettings = cast settings;
+      if (curSettings.compile != null && curSettings.compile.args != null) {
+        if (curSettings.compileDir == null) {
+          Log.fatal('If a compilation is specified, `compileDir must be set');
+        }
+
+        var args = curSettings.compile.args.copy();
+        var ret = Globals.spawn_process_sync(args.shift(), args, curSettings.compileDir);
+        if (ret != 0) {
+          Log.error('Compilation failed');
+          Globals.terminate(1);
+        }
+      }
+
+      // run
+      if (curSettings.run == null) {
+        Log.log('Terminating: There is nothing to run');
+        Globals.terminate(0);
+      }
+      if (curSettings.run.cwd == null) {
+        Log.fatal('`run.cwd` must be set');
+      }
+      if (curSettings.port == null) {
+        port = 6972;
+      } else {
+        port = curSettings.port;
+      }
+      var envs:haxe.DynamicAccess<String> = {
+        HXCPP_DEBUG: "true"
+      };
+      if (port < 0) {
+        Log.verbose('Finding a random port');
+        port = find_random_port(host);
+        Log.verbose('Port found at $port');
+      }
+      envs["HXCPP_DEBUGGER_PORT"] = port + "";
+
+      Globals.add_request( ({
+        seq: 0,
+        type: Request,
+        command: RunInTerminal,
+        arguments: {
+          title: "Hxcpp Debugger Launch",
+          cwd: curSettings.run.cwd,
+          args: change_terminal_args(curSettings.run.args),
+          env: cast envs
+        }
+      } : RunInTerminalRequest), function(res) {
+        var res:RunInTerminalResponse = cast res;
+        if (!res.success) {
+          Log.log('Command output: ${res.message}');
+          Globals.terminate(1);
+        }
+        trace(res.body);
+      });
+
+    case Attach:
+      var attach:AttachRequest = cast launch_or_attach;
+
+      var settings = Globals.get_settings();
+      for (field in Reflect.fields(attach.arguments)) {
+        var curField = Reflect.field(settings, field);
+        if (curField == null) {
+          Reflect.setField(settings, field, Reflect.field(attach.arguments, field));
+        }
+      }
+      start_output_thread();
+
+      var curSettings:utils.Settings.AttachSettings = cast settings;
+      port = curSettings.port;
+      if (port <= 0) {
+        Log.fatal('Attach: Invalid port $port');
+      }
+    case _:
+      Log.fatal('protocol error: Expected "launch" or "attach", but got $launch_or_attach');
+    }
+    return port;
+  }
+
+  private function setup_internal_breakpoints() {
+    _context.breakpoints.add_breakpoint(Internal(on_cppia_load), FuncBr('debugger.Debug', 'refreshCppiaDefinitions'));
+    _context.breakpoints.add_breakpoint(Internal(on_new_classpaths), FuncBr('debugger.Debug', 'setClassPaths'));
+    _context.breakpoints.add_breakpoint(Normal, FuncBr('debugger.Debug', 'debugBreak'));
+  }
+
+  private function on_new_classpaths() {
+    Log.verbose('Receiving new classpaths');
+
+    switch(Globals.add_debugger_command_sync(GetStructured(false, 'classpaths'))) {
+    case Structured(List(_Array, lst)):
+      var arr = [];
+      var lst = lst;
+      while (lst != Terminator) {
+        switch(lst) {
+        case Element(_, Single(_,value), next):
+          arr.push(value);
+          lst = next;
+        case _:
+          Log.error('Unexpected structured value $lst when getting new class paths');
+          break;
+        }
+      }
+      _context.source_files.add_classpaths(arr);
+      Log.log('Classpath information updated');
+      Log.verbose('Added classpaths: $arr');
+    case unexpected:
+      Log.error('Unexpected response when getting new classpaths: $unexpected');
+    }
+
+    switch (Globals.add_debugger_command_sync(Continue(1))) {
+    case OK:
+    case ErrorCurrentThreadNotStopped(n):
+      Log.fatal('Internal classpaths load: Current thread is not stopped ($n)');
+    case ErrorBadCount(n):
+      Log.fatal('Internal classpaths load: Bad count ($n)');
+    case unexpected:
+      Log.fatal('Internal classpaths load: Unexpected ($unexpected)');
+    }
+  }
+
+  private function on_cppia_load() {
+    Log.log('Cppia load call detected');
+    // Log.verbose(Globals.add_debugger_command_sync(WhereCurrentThread(false)) +'');
+    // update files
+    Log.verbose('Updating source files');
+    this._context.query_source_files();
+    // refresh breakpoints that were not found
+    Log.verbose('Refreshing breakpoints');
+    this._context.breakpoints.refresh_breakpoints();
+    // continue
+    switch (Globals.add_debugger_command_sync(Continue(1))) {
+    case OK:
+    case ErrorCurrentThreadNotStopped(n):
+      Log.fatal('Internal cppia load: Current thread is not stopped ($n)');
+    case ErrorBadCount(n):
+      Log.fatal('Internal cppia load: Bad count ($n)');
+    case unexpected:
+      Log.fatal('Internal cppia load: Unexpected ($unexpected)');
+    }
+  }
+
+  private static function find_random_port(host:String) {
+    while (true) {
+      var port = Std.random(60000) + 1024; 
+      try {
+        var sock = new sys.net.Socket();
+        sock.bind(new sys.net.Host(host), port);
+        sock.close();
+        return port;
+      }
+      catch(e:Dynamic) {
+      }
+    }
   }
 
   // private function call_terminal(cwd:String, path:String, wait:Bool) {
@@ -201,15 +616,14 @@ class MyDebugAdapter {
 
   private function start_output_thread() {
     var settings = Globals.get_settings();
-    if (!output_thread_started && settings.debugOutput != null) {
-      output_thread_started = true;
+    if (!_output_thread_started && settings.debugOutput != null) {
+      _output_thread_started = true;
       var out = settings.debugOutput;
       if (!FileSystem.exists(out)) {
         FileSystem.createDirectory(out);
       }
       if (FileSystem.isDirectory(out)) {
         out += '/' + DateTools.format(Date.now(), '%Y%m%d_%H%M%S_log.txt');
-        // out += 'vscode-log.txt';
       }
 
       threads.Recorder.spawn_thread(out);
@@ -1240,64 +1654,6 @@ class MyDebugAdapter {
 //   }
 // }
 
-// class SourceFiles {
-
-// #if windows
-//   static public var SEPARATOR:String = "\\";
-// #else
-//   static public var SEPARATOR:String = '/';
-// #end
-
-//   public static var proj_dir:String = "";
-//   public static var files:Array<String> = null;
-//   public static var files_full:Array<String> = null;
-//   private static var _source_map:StringMap<String> = new StringMap<String>();
-
-//   public static function getVSCSource(source:String):Dynamic {
-//     if (!_source_map.exists(source)) {
-//       var idx:Int = files.indexOf(source);
-
-//       if (idx==-1) {
-//         for (ii in 0...files_full.length) {
-//           var f = files_full[ii]; // TODO: windows separator?
-//           if (StringTools.endsWith(f, SourceFiles.SEPARATOR+source)) {
-//             idx = ii;
-//             break;
-//           }
-//         }
-//       }
-
-//       var mapped:String = source;
-//       if (idx>=0) {
-//         mapped = files_full[idx];
-//         DebugAdapter.log("Found "+files_full[idx]+" for "+source);
-//       } else {
-//         DebugAdapter.log("NOT Found for "+source);
-//       }
-
-//       _source_map.set(source, mapped);
-//     }
-
-//     var f = _source_map.get(source);
-
-//     // { name:fileName, path:absPath }
-//     return { name:f.substr(f.lastIndexOf(SEPARATOR)), path:f };
-//   }
-
-//   private static var _back_map:StringMap<String> = new StringMap<String>();
-//   public static function getDebuggerFilename(vsc_filename:String):String
-//   {
-//     // TODO: this may not handle symlinks, as the debugger's full paths
-//     // have symlinks expanded.
-
-//     // Convert full path to the files[i] equivalent
-//     if (!_back_map.exists(vsc_filename)) {
-//       var idx:Int = files_full.indexOf(vsc_filename);
-//       _back_map.set(vsc_filename, idx>=0 ? files[idx] : vsc_filename);
-//     }
-//     return _back_map.get(vsc_filename);
-//   }
-// }
 
 // class Variable implements IVarRef {
 
@@ -1460,3 +1816,552 @@ class MyDebugAdapter {
 //   }
 // }
 
+class DebugContext {
+  public var main_thread(default, null):cpp.vm.Thread;
+  public var source_files(default, null):SourceFiles;
+  public var breakpoints(default, null):Breakpoints;
+  public var thread_cache(default, null):ThreadCache;
+
+  public function new() {
+    this.main_thread = cpp.vm.Thread.current();
+    this.source_files = new SourceFiles(null);
+    this.breakpoints = new Breakpoints(this);
+    this.thread_cache = new ThreadCache();
+  }
+
+  public function query_source_files() {
+    var files = switch (Globals.add_debugger_command_sync(Files)) {
+      case Files(f): f;
+      case unexpected:
+        Log.fatal('Debugger: Unexpected connector response to Files request: $unexpected');
+    };
+    var fullPath = switch (Globals.add_debugger_command_sync(FilesFullPath)) {
+      case Files(f): f;
+      case unexpected:
+        Log.fatal('Debugger: Unexpected connector response to Files request: $unexpected');
+    };
+
+    this.source_files = new SourceFiles(this.source_files.classpaths);
+    this.source_files.update_sources(files, fullPath);
+  }
+}
+
+class ThreadCache {
+  var _current_thread:Int;
+  var _cached:debugger.IController.ThreadWhereList;
+  var _current_thread_mutex:cpp.vm.Mutex;
+  var _cache_lock:cpp.vm.Lock;
+
+  public function new() {
+    _current_thread_mutex = new cpp.vm.Mutex();
+    _cache_lock = new cpp.vm.Lock();
+    _cache_lock.release();
+    _cached = Terminator;
+  }
+
+  public function reset() {
+    _cache_lock.wait();
+    _cached = Terminator;
+    _cache_lock.release();
+  }
+
+  public function get_threads_where(cb:debugger.IController.Message->Void) {
+    _cache_lock.wait();
+    Globals.add_debugger_command(WhereAllThreads, function(msg) {
+      switch (msg) {
+      case ThreadsWhere(list):
+        _cached = list;
+      case _:
+        _cached = Terminator;
+      }
+      _cache_lock.release();
+      cb(msg);
+    });
+  }
+
+  public function get_thread_info(number:Int, cb:debugger.IController.Message->Void) {
+    _cache_lock.wait();
+    var cache = _cached;
+    while (cache != null) {
+      switch(cache) {
+      case Terminator:
+        break;
+      case Where(num, _, _, next):
+        if (num == number) {
+          _cache_lock.release();
+          cb(ThreadsWhere(cache));
+          return;
+        }
+        cache = next;
+      }
+    }
+    do_with_thread(number, function(msg) {
+      if (msg != null) {
+        _cache_lock.release();
+        cb(msg);
+        return;
+      }
+      var ret = Globals.add_debugger_command_sync(WhereCurrentThread(false));
+      switch(ret) {
+      case ThreadsWhere(Where(num,status,frame_list,next)):
+        _cached = Where(num,status,frame_list,_cached);
+      case _:
+      }
+      _cache_lock.release();
+      cb(ret);
+    });
+  }
+
+  public function do_with_thread(number:Int, fn:Null<debugger.IController.Message>->Void) {
+    _current_thread_mutex.acquire();
+    var err = null;
+    if (_current_thread != number) {
+      var msg = Globals.add_debugger_command_sync(SetCurrentThread(number));
+      switch(msg) {
+        case ThreadLocation(_) | OK:
+          _current_thread = number;        
+        case e:
+          err = e;
+      }
+    }
+    fn(err);
+    _current_thread_mutex.release();
+  }
+}
+
+enum BreakpointOnBreak {
+  Internal(fn:Void->Void);
+  Normal;
+  Conditional(exprCondition:String); 
+}
+
+enum BreakpointKind {
+  LineBr(file:String, line:Int);
+  FuncBr(cls:String, fn:String);
+}
+
+enum BreakpointStatus {
+  Sending;
+  Active;
+  Disabled;
+  NotFound;
+  Error(msg:debugger.IController.Message);
+  CustomError(msg:String);
+}
+
+typedef Breakpoint = {
+  internal_id:Int,
+  ?hxcpp_id:Null<Int>,
+
+  on_break:BreakpointOnBreak,
+  kind:BreakpointKind,
+  status:BreakpointStatus,
+}
+
+class Breakpoints {
+  var _context:DebugContext;
+  var _internal_id = 0;
+
+  var _breakpoints:Map<Int, Breakpoint>;
+  var _breakpoints_by_kind:Map<String, Breakpoint>;
+  var _hxcpp_to_internal:Map<Int, Int> = new Map();
+  var _bp_mutex:cpp.vm.Mutex;
+
+  var _ready:cpp.vm.Deque<{ internal_id: Int, response:debugger.IController.Message }>;
+  var _wait_amount:Int = 0;
+
+  public function new(ctx:DebugContext) {
+    _context = ctx;
+
+    _ready = new cpp.vm.Deque();
+    _breakpoints = new Map();
+    _breakpoints_by_kind = new Map();
+    _bp_mutex = new cpp.vm.Mutex();
+  }
+
+  public function get_breakpoint_from_hxcpp(hxcpp_id:Int):Breakpoint {
+    _bp_mutex.acquire();
+    var ret = _breakpoints[_hxcpp_to_internal[hxcpp_id]];
+    _bp_mutex.release();
+    return ret;
+  }
+
+  public function get_breakpoint(internal_id:Int):Breakpoint {
+    _bp_mutex.acquire();
+    var ret = _breakpoints[internal_id];
+    _bp_mutex.release();
+    return ret;
+  }
+
+  private function set_breakpoint(internal_id:Int, bp:Breakpoint) {
+    _bp_mutex.acquire();
+    _breakpoints[internal_id] = bp;
+    _bp_mutex.release();
+  }
+
+  public function add_breakpoint(on_break:BreakpointOnBreak, kind:BreakpointKind) {
+    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Breakpoint added on a helper thread");
+    var desc = Std.string(kind);
+    var breakpoint = _breakpoints_by_kind[desc];
+    if (breakpoint == null) {
+      breakpoint = { internal_id: _internal_id++, kind:kind, on_break:on_break, status:Sending };
+      Log.verbose('Adding new breakpoint $breakpoint');
+      cmd_add_breakpoint(breakpoint);
+    } else {
+      Log.verbose('Breakpoint $kind already exists');
+      switch [on_break, breakpoint.on_break] {
+        case [Internal(_), Internal(_)]:
+          breakpoint.on_break = on_break;
+        case [Internal(_), _] | [_, Internal(_)]:
+          breakpoint.status = CustomError('Cannot replace internal breakpoint');
+        case _:
+          breakpoint.on_break = on_break;
+      }
+    }
+    return breakpoint.internal_id;
+  }
+
+  private function delete_breakpoint(internal_id:Int) {
+    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Calling thread is not main thread");
+    Log.very_verbose('delete_breakpoint($internal_id)');
+    var bp = this._breakpoints[internal_id];
+    if (bp == null) {
+      Log.verbose('deleting an inexistent breakpoint $internal_id');
+      return false;
+    }
+
+    if (bp.hxcpp_id != null) {
+      _wait_amount++;
+      Globals.add_debugger_command(DeleteBreakpointRange(bp.hxcpp_id, bp.hxcpp_id), function(msg) {
+        _ready.add(null);
+      });
+    } else {
+      Log.verbose('deleting an inactive breakpoint');
+    }
+
+    _bp_mutex.acquire();
+    this._breakpoints.remove(internal_id);
+    _bp_mutex.release();
+    this._breakpoints_by_kind.remove(Std.string(bp.kind));
+    return true;
+  }
+
+  public function vscode_set_breakpoints(request:SetBreakpointsRequest):Void {
+    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Setting breakpoints on a different thread");
+    wait_all_added();
+    // first of all, delete all unreferenced breakpoints
+    var full_path = _context.source_files.normalize_full_path(request.arguments.source.path),
+        to_delete = [];
+    var lines = request.arguments.breakpoints;
+    for (bp in _breakpoints) {
+      if (bp.on_break.match(Internal(_))) continue;
+      switch(bp.kind) {
+      case LineBr(file, line) if (file == full_path):
+        if (lines == null || !lines.exists(function(src) return src.line == line)) {
+          to_delete.push(bp);
+        }
+      case _:
+      }
+    }
+
+    for (bp in to_delete) {
+      delete_breakpoint(bp.internal_id);
+    }
+    var ids = [];
+    for (line in lines) {
+      var on_break = line.condition != null ? Conditional(line.condition) : Normal;
+      ids.push(this.add_breakpoint(on_break, LineBr(full_path, line.line)));
+    }
+    
+    var bps = [];
+    var ret:SetBreakpointsResponse = { type: Response, seq:0, request_seq: request.seq, success:true, command: Std.string(request.command), body: { breakpoints: bps } };
+    if (ids.length > 0) {
+      wait_all_added();
+      for (i in 0...lines.length) {
+        var ln = lines[i];
+        var id = ids[i];
+        var bp = _breakpoints[id];
+        var msg = null;
+        if (bp.hxcpp_id == null) {
+          switch(bp.status) {
+            case NotFound:
+              msg = 'This source was not found on the binary. It might be loaded dynamically by cppia';
+            case Error(err):
+              msg = 'Unexpected debugger response $err';
+            case CustomError(err):
+              msg = err;
+            case _:
+              Log.error('Unexpected status ${bp.status} for breakpoint $id');
+          }
+        }
+
+        bps.push({ id: id, verified:bp.hxcpp_id != null, message: msg, line:ln.line });
+      }
+    }
+
+    Globals.add_response(request, ret);
+  }
+
+  public function vscode_set_fn_breakpoints(request:SetFunctionBreakpointsRequest):Void {
+    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Setting breakpoints on a different thread");
+    wait_all_added();
+    // first of all, delete all unreferenced breakpoints
+    var to_delete = [];
+    var bps = request.arguments.breakpoints;
+    for (bp in _breakpoints) {
+      if (bp.on_break.match(Internal(_))) continue;
+      switch(bp.kind) {
+      case FuncBr(c,f):
+        if (!request.arguments.breakpoints.exists(function(bp) return bp.name == '$c.$f')) {
+          to_delete.push(bp);
+        }
+      case _:
+      }
+    }
+
+    for (bp in to_delete) {
+      delete_breakpoint(bp.internal_id);
+    }
+    var ids = [];
+    for (bp in bps) {
+      var on_break = bp.condition != null ? Conditional(bp.condition) : Normal;
+      var split = null, chr = null;
+      if (bp.name.startsWith('/')) {
+        split = ~/[^\\]\//.split(bp.name);
+        chr = '/';
+      } else {
+        split = bp.name.split('.');
+        chr = '.';
+      }
+      var fn = split.pop(),
+          cls = split.join(chr);
+      ids.push(this.add_breakpoint(on_break, FuncBr(cls, fn)));
+    }
+    
+    var bps = [];
+    var ret:SetFunctionBreakpointsResponse = { type: Response, seq:0, request_seq: request.seq, success:true, command: Std.string(request.command), body: { breakpoints: bps } };
+    if (ids.length > 0) {
+      wait_all_added();
+      for (i in 0...bps.length) {
+        var ln = bps[i];
+        var id = ids[i];
+        var bp = _breakpoints[id];
+        var msg = null;
+        if (bp.hxcpp_id == null) {
+          switch(bp.status) {
+            case NotFound:
+              msg = 'This source was not found on the binary. It might be loaded dynamically by cppia';
+            case Error(err):
+              msg = 'Unexpected debugger response $err';
+            case CustomError(err):
+              msg = err;
+            case _:
+              Log.error('Unexpected status ${bp.status} for breakpoint $id');
+          }
+        }
+
+        bps.push({ id: id, verified:bp.hxcpp_id != null, message: msg, line:ln.line });
+      }
+    }
+
+    Globals.add_response(request, ret);
+  }
+
+  private function cmd_add_breakpoint(bp:Breakpoint) {
+    _wait_amount++;
+    var internal_id = bp.internal_id;
+    _bp_mutex.acquire();
+    _breakpoints[internal_id] = bp;
+    _bp_mutex.release();
+    _breakpoints_by_kind[Std.string(bp.kind)] = bp;
+    var cmd = switch (bp.kind) {
+      case LineBr(file, line):
+        var source_to_send = _context.source_files.get_source_path(file);
+        Command.AddFileLineBreakpoint(source_to_send, line);
+      case FuncBr(cls, fn):
+        Command.AddClassFunctionBreakpoint(cls, fn);
+    }
+    Globals.add_debugger_command(cmd, function(ret) {
+      _ready.add({ response: ret, internal_id:internal_id });
+    });
+  }
+
+  public function refresh_breakpoints() {
+    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Breakpoint added on a helper thread");
+    if (_wait_amount != 0) {
+      wait_all_added();
+    }
+
+    for (bp in _breakpoints) {
+      var resend = false;
+      switch(bp.status) {
+      case Sending:
+        Log.error('Debugger: Unexpected breakpoint with `sending` status $bp');
+      case NotFound | Error(_) | CustomError(_):
+        resend = true;
+      case Active:
+        switch(bp.kind) {
+        case FuncBr(c, f) if (c.startsWith('/') || f.startsWith('/')):
+          resend = true;
+        case _:
+        }
+      case Disabled:
+      }
+      if (resend) {
+        cmd_add_breakpoint(bp);
+      }
+    }
+  }
+
+  public function wait_all_added() {
+    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "wait_all_added called on a helper thread");
+    for (i in 0..._wait_amount) {
+      var id = _ready.pop(true);
+      if (id != null) {
+        var bp = _breakpoints[id.internal_id];
+        if (bp == null) {
+          Log.error('Debugger error: Breakpoint ${id.internal_id} just got a response, but it is not registered!');
+        }
+        switch(id.response) {
+        case FileLineBreakpointNumber(num):
+          bp.status = Active;
+          bp.hxcpp_id = num;
+          _bp_mutex.acquire();
+          _hxcpp_to_internal[num] = bp.internal_id;
+          _bp_mutex.release();
+        case ClassFunctionBreakpointNumber(num, bad_classes):
+          if (bad_classes != null && bad_classes.length > 0) {
+            Log.verbose('Found some bad classes while setting breakpoint: $bad_classes');
+          }
+          bp.status = Active;
+          bp.hxcpp_id = num;
+          _bp_mutex.acquire();
+          _hxcpp_to_internal[num] = bp.internal_id;
+          _bp_mutex.release();
+        case ErrorBadFunctionNameRegex(details):
+          bp.status = CustomError('Bad function name regex: $details');
+        case ErrorBadClassNameRegex(details):
+          bp.status = CustomError('Bad class name regex: $details');
+        case ErrorNoMatchingFunctions(_,_,bad_classes):
+          if (bad_classes != null && bad_classes.length > 0) {
+            Log.verbose('Found some bad classes while setting breakpoint: $bad_classes');
+          }
+          bp.status = NotFound;
+        case ErrorNoSuchFile(_):
+          bp.status = NotFound;
+        case unexpected:
+          Log.error('Unexpected response ${unexpected} for breakpoint $bp');
+          bp.status = Error(unexpected);
+        }
+      }
+    }
+    _wait_amount = 0;
+  }
+}
+
+class SourceFiles {
+  public var classpaths(default, null):Array<String>;
+  var _sources:Array<String>;
+  var _original_sources:Array<String>;
+  var _full_sources:Array<String>;
+
+  public function new(classpaths) {
+    this.classpaths = classpaths;
+  }
+
+  public function add_classpaths(arr:Array<String>) {
+    if (arr == null) {
+      return;
+    }
+
+    if (classpaths == null) {
+      classpaths = arr;
+    }
+    for (cp in arr) {
+      if (classpaths.indexOf(cp) < 0) {
+        classpaths.push(cp);
+      }
+    }
+  }
+
+  public function update_sources(sources:Array<String>, full_sources:Array<String>) {
+    add_classpaths(Globals.get_settings().classpaths);
+    this._original_sources = sources;
+    this._sources = [ for (source in sources) haxe.io.Path.normalize(source) ];
+    this._full_sources = [ for (source in full_sources) normalize_full_path(source) ];
+  }
+
+  public function normalize_full_path(source:String) {
+    return try {
+      if (haxe.io.Path.isAbsolute(source)) {
+        haxe.io.Path.normalize(FileSystem.fullPath(source));
+      } else {
+        haxe.io.Path.normalize(source);
+      }
+    }
+    catch(e:Dynamic) {
+      haxe.io.Path.normalize(source);
+    }
+  }
+
+  public function get_source_path(full_path:String) {
+    var normalized = normalize_full_path(full_path).toLowerCase();
+    for (i in 0..._full_sources.length) {
+      if (_full_sources[i].toLowerCase() == normalized) {
+        Log.very_verbose('get_source_path($full_path) = ${_original_sources[i]}');
+        return _original_sources[i];
+      }
+    }
+    // this might be a cppia source, which doesn't contain the full path
+    for (i in 0..._full_sources.length) {
+      if (normalized.endsWith(_full_sources[i].toLowerCase())) {
+        Log.very_verbose('cppia: get_source_path($full_path) = ${_original_sources[i]}');
+        return _original_sources[i];
+      }
+    }
+
+    Log.verbose(Std.string(_full_sources));
+    Log.verbose('get_source_path($full_path -> $normalized) could not find any candidate');
+    return normalized;
+  }
+
+  public function resolve_source_path(name:String) {
+    if (name.trim() == '?') {
+      return name;
+    }
+    var normalized = haxe.io.Path.normalize(name);
+    var ret = null;
+    var idx = _sources.indexOf(name);
+    if (idx >= 0) {
+      ret = _full_sources[idx];
+    }
+    if (ret == null) {
+      ret = _full_sources.find(function(full) return full.endsWith(normalized));
+    }
+    if (ret == null) {
+      Log.error('Debugger: Could not find the path to $name');
+      return name;
+    }
+    if (!sys.FileSystem.exists(ret)) {
+      // this can happen because cppia packages don't have a full path associated with them
+      if (classpaths == null) {
+        Log.error('Debugger: Could not find the full path to $name. ' +
+          'This can happen if the source was deleted or if this is a cppia package.\n' +
+          'In case this is a cppia package, consider adding `classpaths` to your configuration file ' +
+          'to specifiy the original full classpaths where the compilation took place. This way relative paths ' +
+          'can be expanded.');
+        return name;
+      } else {
+        var cp = classpaths.find(function(dir) return sys.FileSystem.exists(dir + '/' + normalized));
+        if (cp != null) {
+          return cp + '/' + normalized;
+        } else {
+          Log.error('Debugger: Could not find the full path to $name. Perhaps it was deleted, or `compileDir` references the wrong path');
+          return name;
+        }
+      }
+    } else {
+      return ret;
+    }
+  }
+}

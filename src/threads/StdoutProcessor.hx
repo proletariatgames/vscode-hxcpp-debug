@@ -17,6 +17,16 @@ class StdoutProcessor {
                     if (msg == null) {
                         break;
                     }
+                    var buf = new StringBuf();
+                    for (i in 0...msg.length) {
+                        var code = StringTools.fastCodeAt(msg, i);
+                        if (code < ' '.code) {
+                            buf.addChar(' '.code);
+                        } else {
+                            buf.addChar(code);
+                        }
+                    }
+                    msg = buf.toString();
                     var str = 'Content-Length: ${msg.length}$separator$msg';
                     Globals.record_io(false, str);
                     stdoutOutput.writeString(str);

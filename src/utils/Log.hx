@@ -49,15 +49,22 @@ class Log {
     }
 
     inline public static function warn(msg:String, ?pos:PosInfos) {
-        log_with_level(Warning, msg, pos);
+        log_with_level(Warning, 'Warning: ' +  msg, pos);
     }
 
     inline public static function error(msg:String, ?pos:PosInfos) {
         log_with_level(Error, msg, pos);
     }
 
-    inline public static function fatal(msg:String, ?pos:PosInfos) {
+    inline public static function fatal(msg:String, ?pos:PosInfos):Dynamic {
         log_with_level(Fatal, msg, pos);
         Globals.exit(1);
+        throw 'assert';
+    }
+
+    inline public static function assert(cond:Bool, msg:String, ?pos:PosInfos) {
+        if (!cond) {
+            log_with_level(Fatal, msg, pos);
+        }
     }
 }

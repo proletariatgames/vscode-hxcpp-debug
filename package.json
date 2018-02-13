@@ -59,10 +59,6 @@
                 "type": "object",
                 "description": "Set this if you want the debugger to compile the project before running",
                 "properties": {
-                  "cwd": {
-                    "type": "string",
-                    "description": "An optional path which specifies the directory where a compilation will take place.\nThis can be used to indicate where the project was compiled, in order to fix relative paths."
-                  },
                   "args": {
                     "type": "array",
                     "items": {
@@ -71,6 +67,17 @@
                     "description": "List of arguments. The first argument is the command to run."
                   }
                 }
+              },
+              "compileDir": {
+                "type": "string",
+                "description": "An optional path which specifies the directory where a compilation will take place."
+              },
+              "classpaths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "An optional setting which specifies the full classpaths associated with a compilation.\nThis can be used to indicate where the project was compiled, in order to fix relative paths."
               },
               "run": {
                 "type": "object",
@@ -92,12 +99,42 @@
                 "required": ["args"]
               },
               "port": {
-                "type": "object",
+                "type": "integer",
                 "description": "The target port. If set to a value less than 0, it will be chosen at random and passed as an environment variable, HXCPP_DEBUGGER_PORT.",
                 "default": 6972
+              },
+              "host": {
+                "type": "string",
+                "description": "The target host. Can be used to debug remote clients (e.g. mobile)",
+                "default": "localhost"
               }
             },
             "required": ["run"]
+          },
+          "attach": {
+            "properties": {
+              "port": {
+                "type": "integer",
+                "description": "The target port.",
+                "default": 6972
+              },
+              "host": {
+                "type": "string",
+                "description": "The target host. Can be used to debug remote clients (e.g. mobile)",
+                "default": "localhost"
+              },
+              "compileDir": {
+                "type": "string",
+                "description": "An optional path which specifies the directory where a compilation will take place."
+              },
+              "classpaths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "An optional setting which specifies the full classpaths associated with a compilation.\nThis can be used to indicate where the project was compiled, in order to fix relative paths."
+              }
+            }
           }
         },
 

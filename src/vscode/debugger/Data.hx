@@ -179,6 +179,14 @@ typedef Response = {
   @:optional var message : String;
 }
 
+@:enum abstract StoppedReason(String) {
+  var Step = 'step';
+  var Breakpoint = 'breakpoint';
+  var Exception = 'exception';
+  var Pause = 'pause';
+  var Entry = 'entry';
+}
+
 /**
   Event message for 'initialized' event type.
   This event indicates that the debug adapter is ready to accept configuration requests (e.g. SetBreakpointsRequest, SetExceptionBreakpointsRequest).
@@ -209,7 +217,7 @@ typedef StoppedEvent = {
       The reason for the event.
       For backward compatibility this string is shown in the UI if the 'description' attribute is missing (but it must not be translated).
     **/
-    var reason : ReasonEnum;
+    var reason : StoppedReason;
     /**
       The full reason for the event, e.g. 'Paused on exception'. This string is shown in the UI as is.
     **/

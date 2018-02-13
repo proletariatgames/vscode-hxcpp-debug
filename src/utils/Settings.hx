@@ -4,12 +4,15 @@ typedef Settings = {
     ?logLevel:Int,
     ?stopOnEntry:Bool,
     ?debugOutput:String,
+    ?timeout:Int,
+    ?compileDir:String,
+    ?classpaths:Array<String>,
+    ?host:String,
 }
 
 typedef LaunchSettings = {
     > Settings,
     ?compile: {
-        ?cwd:String,
         ?args:Array<String>
     },
     run: {
@@ -17,4 +20,9 @@ typedef LaunchSettings = {
         args:Array<String>
     },
     ?port:Int,
+}
+
+typedef AttachSettings = {
+    > Settings,
+    port:Int,
 }
