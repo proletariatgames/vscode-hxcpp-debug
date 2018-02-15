@@ -55,26 +55,97 @@ package vscode.debugger;
   var ExceptionInfo = "exceptionInfo";
 }
 
-@:enum abstract ReasonEnum(String) {
-  var New = "new";
-  var Changed = "changed";
-  var Removed = "removed";
+@:enum abstract ProtocolMessageTypeEnum(String) {
+  var Request = "request";
+  var Response = "response";
+  var Event = "event";
 }
 
-@:enum abstract CategoryEnum(String) {
+@:enum abstract StoppedEventReasonEnum(String) {
+  var Step = "step";
+  var Breakpoint = "breakpoint";
+  var Exception = "exception";
+  var Pause = "pause";
+  var Entry = "entry";
+}
+
+@:enum abstract ThreadEventReasonEnum(String) {
+  var Started = "started";
+  var Exited = "exited";
+}
+
+@:enum abstract OutputEventCategoryEnum(String) {
   var Console = "console";
   var Stdout = "stdout";
   var Stderr = "stderr";
   var Telemetry = "telemetry";
 }
 
-@:enum abstract StartMethodEnum(String) {
+@:enum abstract BreakpointEventReasonEnum(String) {
+  var Changed = "changed";
+  var New = "new";
+  var Removed = "removed";
+}
+
+@:enum abstract ModuleEventReasonEnum(String) {
+  var New = "new";
+  var Changed = "changed";
+  var Removed = "removed";
+}
+
+@:enum abstract LoadedSourceEventReasonEnum(String) {
+  var New = "new";
+  var Changed = "changed";
+  var Removed = "removed";
+}
+
+@:enum abstract ProcessEventStartMethodEnum(String) {
   var Launch = "launch";
   var Attach = "attach";
   var AttachForSuspendedLaunch = "attachForSuspendedLaunch";
 }
 
-@:enum abstract KindEnum(String) {
+@:enum abstract RunInTerminalRequestArgumentsKindEnum(String) {
+  var Integrated = "integrated";
+  var External = "external";
+}
+
+@:enum abstract InitializeRequestArgumentsPathFormatEnum(String) {
+  var Path = "path";
+  var Uri = "uri";
+}
+
+@:enum abstract VariablesArgumentsFilterEnum(String) {
+  var Indexed = "indexed";
+  var Named = "named";
+}
+
+@:enum abstract EvaluateArgumentsContextEnum(String) {
+  var Watch = "watch";
+  var Repl = "repl";
+  var Hover = "hover";
+}
+
+@:enum abstract ColumnDescriptorTypeEnum(String) {
+  var String = "string";
+  var Number = "number";
+  var Boolean = "boolean";
+  var UnixTimestampUTC = "unixTimestampUTC";
+}
+
+@:enum abstract SourcePresentationHintEnum(String) {
+  var Normal = "normal";
+  var Emphasize = "emphasize";
+  var Deemphasize = "deemphasize";
+}
+
+@:enum abstract StackFramePresentationHintEnum(String) {
+  var Normal = "normal";
+  var Label = "label";
+  var Subtle = "subtle";
+}
+
+@:enum abstract VariablePresentationHintKindEnum(String) {
   var Property = "property";
   var Method = "method";
   var Class = "class";
@@ -87,29 +158,7 @@ package vscode.debugger;
   var Virtual = "virtual";
 }
 
-@:enum abstract PathFormatEnum(String) {
-  var Path = "path";
-  var Uri = "uri";
-}
-
-@:enum abstract FilterEnum(String) {
-  var Indexed = "indexed";
-  var Named = "named";
-}
-
-@:enum abstract ContextEnum(String) {
-  var Watch = "watch";
-  var Repl = "repl";
-  var Hover = "hover";
-}
-
-@:enum abstract PresentationHintEnum(String) {
-  var Normal = "normal";
-  var Label = "label";
-  var Subtle = "subtle";
-}
-
-@:enum abstract VisibilityEnum(String) {
+@:enum abstract VariablePresentationHintVisibilityEnum(String) {
   var Public = "public";
   var Private = "private";
   var Protected = "protected";
@@ -179,14 +228,6 @@ typedef Response = {
   @:optional var message : String;
 }
 
-@:enum abstract StoppedReason(String) {
-  var Step = 'step';
-  var Breakpoint = 'breakpoint';
-  var Exception = 'exception';
-  var Pause = 'pause';
-  var Entry = 'entry';
-}
-
 /**
   Event message for 'initialized' event type.
   This event indicates that the debug adapter is ready to accept configuration requests (e.g. SetBreakpointsRequest, SetExceptionBreakpointsRequest).
@@ -217,7 +258,7 @@ typedef StoppedEvent = {
       The reason for the event.
       For backward compatibility this string is shown in the UI if the 'description' attribute is missing (but it must not be translated).
     **/
-    var reason : StoppedReason;
+    var reason : StoppedEventReasonEnum;
     /**
       The full reason for the event, e.g. 'Paused on exception'. This string is shown in the UI as is.
     **/
@@ -310,7 +351,7 @@ typedef ThreadEvent = {
     /**
       The reason for the event.
     **/
-    var reason : ReasonEnum;
+    var reason : ThreadEventReasonEnum;
     /**
       The identifier of the thread.
     **/
@@ -331,7 +372,7 @@ typedef OutputEvent = {
     /**
       The output category. If not specified, 'console' is assumed.
     **/
-    @:optional var category : CategoryEnum;
+    @:optional var category : OutputEventCategoryEnum;
     /**
       The output to report.
     **/
@@ -372,7 +413,7 @@ typedef BreakpointEvent = {
     /**
       The reason for the event.
     **/
-    var reason : ReasonEnum;
+    var reason : BreakpointEventReasonEnum;
     /**
       The breakpoint.
     **/
@@ -393,7 +434,7 @@ typedef ModuleEvent = {
     /**
       The reason for the event.
     **/
-    var reason : ReasonEnum;
+    var reason : ModuleEventReasonEnum;
     /**
       The new, changed, or removed module. In case of 'removed' only the module id is used.
     **/
@@ -414,7 +455,7 @@ typedef LoadedSourceEvent = {
     /**
       The reason for the event.
     **/
-    var reason : ReasonEnum;
+    var reason : LoadedSourceEventReasonEnum;
     /**
       The new, changed, or removed source.
     **/
@@ -447,7 +488,7 @@ typedef ProcessEvent = {
     /**
       Describes how the debug engine started debugging this process.
     **/
-    @:optional var startMethod : StartMethodEnum;
+    @:optional var startMethod : ProcessEventStartMethodEnum;
   }
 
 ;
@@ -470,7 +511,7 @@ typedef RunInTerminalRequestArguments = {
   /**
     What kind of terminal to launch.
   **/
-  @:optional var kind : KindEnum;
+  @:optional var kind : RunInTerminalRequestArgumentsKindEnum;
   /**
     Optional title of the terminal.
   **/
@@ -558,7 +599,7 @@ typedef InitializeRequestArguments = {
   /**
     Determines in what format paths are specified. The default is 'path', which is the native format.
   **/
-  @:optional var pathFormat : PathFormatEnum;
+  @:optional var pathFormat : InitializeRequestArgumentsPathFormatEnum;
   /**
     Client supports the optional type attribute for variables.
   **/
@@ -1210,7 +1251,7 @@ typedef VariablesArguments = {
   /**
     Optional filter to limit the child variables to either named or indexed. If ommited, both types are fetched.
   **/
-  @:optional var filter : FilterEnum;
+  @:optional var filter : VariablesArgumentsFilterEnum;
   /**
     The index of the first variable to return; if omitted children start at 0.
   **/
@@ -1471,7 +1512,7 @@ typedef EvaluateArguments = {
   /**
     The context in which the evaluate request is run.
   **/
-  @:optional var context : ContextEnum;
+  @:optional var context : EvaluateArgumentsContextEnum;
   /**
     Specifies details on how to format the Evaluate result.
   **/
@@ -1793,7 +1834,7 @@ typedef ExceptionBreakpointsFilter = {
   /**
     The internal ID of the filter. This value is passed to the setExceptionBreakpoints request.
   **/
-  var filter : FilterEnum;
+  var filter : String;
   /**
     The name of the filter. This will be shown in the UI.
   **/
@@ -1962,7 +2003,7 @@ typedef Source = {
   /**
     An optional hint for how to present the source in the UI. A value of 'deemphasize' can be used to indicate that the source is not available or that it is skipped on stepping.
   **/
-  @:optional var presentationHint : PresentationHintEnum;
+  @:optional var presentationHint : SourcePresentationHintEnum;
   /**
     The (optional) origin of this source: possible values 'internal module', 'inlined content from source map', etc.
   **/
@@ -2020,7 +2061,7 @@ typedef StackFrame = {
   /**
     An optional hint for how to present this frame in the UI. A value of 'label' can be used to indicate that the frame is an artificial frame that is used as a visual label or separator. A value of 'subtle' can be used to change the appearance of a frame in a 'subtle' way.
   **/
-  @:optional var presentationHint : PresentationHintEnum;
+  @:optional var presentationHint : StackFramePresentationHintEnum;
 }
 
 /**
@@ -2123,7 +2164,7 @@ typedef VariablePresentationHint = {
   /**
     The kind of variable. Before introducing additional values, try to use the listed values.
   **/
-  @:optional var kind : KindEnum;
+  @:optional var kind : VariablePresentationHintKindEnum;
   /**
     Set of attributes represented as an array of strings. Before introducing additional values, try to use the listed values.
   **/
@@ -2131,7 +2172,7 @@ typedef VariablePresentationHint = {
   /**
     Visibility of variable. Before introducing additional values, try to use the listed values.
   **/
-  @:optional var visibility : VisibilityEnum;
+  @:optional var visibility : VariablePresentationHintVisibilityEnum;
 }
 
 /**

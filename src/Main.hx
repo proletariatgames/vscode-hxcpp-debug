@@ -34,18 +34,6 @@ class Main {
     haxe.Log.trace = function(str,?pos:haxe.PosInfos) {
       Log.log(Std.string(str), pos);
     }
-
-    // new debugger.HaxeRemote(true, "localhost", 7001);
-    // var log:Output = null;
-    // if (sys.FileSystem.isDirectory("/tmp")) {
-    //   log = sys.io.File.append("/tmp/adapter.log", false);
-    // }
-    // var input = Sys.stdin();
-    // if (Sys.args().length>0) {
-    //   trace("Reading file input...");
-    //   input = sys.io.File.read(Sys.args()[0], true);
-    // }
-    // new DebugAdapter(input, Sys.stdout(), log);
     try {
       new MyDebugAdapter().loop();
     } catch(e:Dynamic) {
@@ -61,7 +49,6 @@ class MyDebugAdapter {
 
   public function new() {
     this._context = new DebugContext();
-    // threads.Recorder.
     if (Globals.get_settings().debugOutput != null) {
       start_output_thread();
     }
@@ -210,7 +197,9 @@ class MyDebugAdapter {
           case StackTrace:
             respond_stack_trace(cast req);
           case Scopes:
+            respond_scopes(cast req);
           case Variables:
+            respond_variables(cast req);
           case SetVariable:
           case Source:
           case Threads:
@@ -259,6 +248,63 @@ class MyDebugAdapter {
         Globals.add_response_to(req, false, 'Error while executing $cmd: Current thread ($num) is not stopped');
       case unexpected:
         Globals.add_response_to(req, false, 'Unexpected response to $cmd: $unexpected');
+      }
+    });
+  }
+
+  private function respond_variables(req:VariablesRequest) {
+  }
+
+  private function respond_scopes(req:ScopesRequest) {
+    var thread_and_frame = req.arguments.frameId;
+    var thread_id = (thread_and_frame >>> 16) & 0xFFFF;
+    var frame_id = thread_and_frame & 0xFFFF;
+
+    _context.thread_cache.get_thread_info(thread_id, function(msg) {
+      var ret:Array<Scope> = [];
+      switch (msg) {
+        case ThreadsWhere(list):
+          switch(list) {
+          case Terminator:
+            Globals.add_response_to(req, false, 'Unexpected ThreadsWehre response: Terminator');
+            return;
+          case Where(num, status, frame_list, next):
+            Log.assert(num == thread_id, 'Requested $thread_id - got $num');
+            var frame_list = frame_list;
+            while (true) {
+              switch (frame_list) {
+              case Terminator: break;
+              case Frame(is_current, number, class_name, fn_name, file_name, ln_num, next):
+                if (number == frame_id) {
+                  ret.push({
+                    name: 'Locals',
+                    variablesReference: _context.thread_cache.get_or_create_var_ref(StackFrame(thread_id, frame_id)),
+                    expensive: false,
+                    source: {
+                      name: file_name,
+                      path: _context.source_files.resolve_source_path(file_name),
+                    },
+                    line: ln_num,
+                  });
+                  break;
+                }
+                frame_list = next;
+              }
+            }
+          }
+          Globals.add_response(req, ({
+            seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+            success: true,
+            body: {
+              scopes: ret
+            }
+          } : ScopesResponse));
+        case ErrorCurrentThreadNotStopped(_):
+          Globals.add_response_to(req, false, 'Thread $thread_id is not stopped');
+          return;
+        case unexpected:
+          Globals.add_response_to(req, false, 'Unexpected response when getting current thread location: $unexpected');
+          return;
       }
     });
   }
@@ -379,13 +425,14 @@ class MyDebugAdapter {
 
       var should_break = true,
           msg = null,
-          reason:StoppedReason = null;
+          reason:StoppedEventReasonEnum = null;
       switch (thread_status) {
       case Running:
         Log.error('Unexpected thread status Running');
       case StoppedImmediate:
         reason = Pause;
       case StoppedBreakpoint(bp_num):
+        reason = Breakpoint;
         var bp = _context.breakpoints.get_breakpoint_from_hxcpp(bp_num);
         switch(bp.on_break) {
         case Internal(fn):
@@ -437,7 +484,6 @@ class MyDebugAdapter {
     switch(launch_or_attach.command) {
     case Launch:
       var launch:LaunchRequest = cast launch_or_attach;
-      // launch.arguments.noDebug
       var settings = Globals.get_settings();
       for (field in Reflect.fields(launch.arguments)) {
         var curField = Reflect.field(settings, field);
@@ -609,10 +655,6 @@ class MyDebugAdapter {
       }
     }
   }
-
-  // private function call_terminal(cwd:String, path:String, wait:Bool) {
-  //   // Globals.add_event();
-  // }
 
   private function start_output_thread() {
     var settings = Globals.get_settings();
@@ -1846,23 +1888,75 @@ class DebugContext {
   }
 }
 
+enum VarRef {
+  StackFrame(thread_id:Int, frame_id:Int);
+  StackVar(thread_id:Int, frame_id:Int, expr:String);
+}
+
 class ThreadCache {
   var _current_thread:Int;
+  var _current_frame:Int;
   var _cached:debugger.IController.ThreadWhereList;
   var _current_thread_mutex:cpp.vm.Mutex;
   var _cache_lock:cpp.vm.Lock;
+  var _var_refs:Array<VarRef>;
+  var _var_ref_map:Map<VarRef, Int>;
+  var _var_ref_len = 0;
 
   public function new() {
     _current_thread_mutex = new cpp.vm.Mutex();
     _cache_lock = new cpp.vm.Lock();
     _cache_lock.release();
     _cached = Terminator;
+    _var_refs = [];
+    _var_ref_map = new Map();
+  }
+
+  public function get_or_create_var_ref(vr:VarRef):Int {
+    _current_thread_mutex.acquire();
+    switch(vr) {
+    case StackVar(_, _, expr) if (expr.indexOf('.') >= 0 || expr.indexOf('(') >= 0 || expr.indexOf('[') >= 0): // don't even bother checking
+      var newRef = _var_refs.push(vr) - 1;
+      _current_thread_mutex.release();
+      return newRef;
+    case _:
+
+    }
+    var existing = _var_ref_map[vr];
+    if (existing != null) {
+      _current_thread_mutex.release();
+      return existing;
+    }
+    var newRef = _var_refs.push(vr) - 1;
+    _var_ref_map[vr] = newRef;
+    _current_thread_mutex.release();
+    return newRef;
   }
 
   public function reset() {
     _cache_lock.wait();
     _cached = Terminator;
     _cache_lock.release();
+  }
+
+  public function do_with_frame(thread_id:Int, frame_id:Int, cb:Null<debugger.IController.Message>->Void) {
+    do_with_thread(thread_id, function(msg) {
+      if (msg != null) {
+        cb(msg);
+        return;
+      }
+      if (_current_frame == frame_id) {
+        cb(null);
+      } else {
+        switch(Globals.add_debugger_command_sync(SetFrame(frame_id))) {
+        case ThreadLocation(_):
+          _current_frame = frame_id;
+          cb(null);
+        case err:
+          cb(err);
+        }
+      }
+    });
   }
 
   public function get_threads_where(cb:debugger.IController.Message->Void) {
@@ -1918,8 +2012,12 @@ class ThreadCache {
     if (_current_thread != number) {
       var msg = Globals.add_debugger_command_sync(SetCurrentThread(number));
       switch(msg) {
-        case ThreadLocation(_) | OK:
+        case ThreadLocation(_,stack_frame_id,_,_,_,_):
           _current_thread = number;        
+          _current_frame = stack_frame_id;
+        case OK:
+          _current_thread = number;        
+          _current_frame = -1; // apparently this happens if the thread is running
         case e:
           err = e;
       }

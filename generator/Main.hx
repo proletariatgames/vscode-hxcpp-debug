@@ -82,10 +82,10 @@ class Main {
                                     }
                                     enumToType[Std.string(Reflect.field(prop, 'enum')[0])] = typeName;
                                 } else {
-                                    enumFields[propName] = arr;
+                                    enumFields[typeName + toFirstUpper(propName)] = arr;
                                 }
                             } else if (prop._enum != null) {
-                                enumFields[propName] = prop._enum;
+                                enumFields[typeName + toFirstUpper(propName)] = prop._enum;
                             }
                             if (prop.type == 'object') {
                                 visitDef(prop, false);
@@ -221,8 +221,8 @@ class Main {
                         }
                     }
                     writePart(toFirstUpper(unionName) + 'Enum');
-                } else if (name != null && enumFields.exists(name) ) {
-                    writePart(toFirstUpper(name) + 'Enum');
+                } else if (name != null && enumFields.exists(typeName + toFirstUpper(name)) ) {
+                    writePart(typeName + toFirstUpper(name) + 'Enum');
                 } else if (Std.is(def.type, Array)) {
                     writePart('Dynamic');
                 } else {
