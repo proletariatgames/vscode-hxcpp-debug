@@ -2132,7 +2132,7 @@ typedef Variable = {
   /**
     The type of the variable's value. Typically shown in the UI when hovering over the value.
   **/
-  @:optional var type : TypeEnum;
+  @:optional var type : String;
   /**
     Properties of a variable that can be used to determine how to render the variable in the UI.
   **/

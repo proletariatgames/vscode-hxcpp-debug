@@ -8,7 +8,7 @@ import vscode.debugger.Data;
 class Main {
   static function main() {
     haxe.Log.trace = function(str,?pos:haxe.PosInfos) {
-      Log.log(Std.string(str), pos);
+      Log.verbose(Std.string(str), pos);
     }
     try {
       new DebugAdapter().loop();
@@ -221,7 +221,121 @@ class DebugAdapter {
     });
   }
 
+  private static function val_type_to_string(t:debugger.IController.StructuredValueType):String {
+    return switch(t) {
+      case TypeNull: "Null";
+      case TypeBool: "Bool";
+      case TypeInt: "Int";
+      case TypeFloat: "Float";
+      case TypeString: "String";
+      case TypeInstance(name) | TypeEnum(name): name;
+      case TypeAnonymous(_): "<anonymous>";
+      case TypeClass(name): 'Class<' + name + '>';
+      case TypeFunction: '<function>';
+      case TypeArray: 'Array';
+    }
+  }
+
+  private function structured_to_vscode(thread_id:Int, frame_id:Int, s:debugger.IController.StructuredValue, name:String, out:Array<vscode.debugger.Data.Variable>) {
+    switch(s) {
+    case Elided(val_type, get_expression):
+      out.push({
+        name: name,
+        value: '',
+        type: val_type_to_string(val_type),
+        evaluateName: get_expression,
+        variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, get_expression)),
+      });
+    case Single(val_type, val):
+      out.push({
+        name: name,
+        value: val,
+        type: val_type_to_string(val_type),
+        variablesReference: 0,
+      });
+    case List(list_type, lst):
+      var lst = lst;
+      while (true) {
+        switch(lst) {
+        case Terminator:
+          break;
+        case Element(name, val, next):
+          structured_to_vscode(thread_id, frame_id, val, name, out);
+          lst = next;
+        }
+      }
+    }
+  }
+
   private function respond_variables(req:VariablesRequest) {
+    var ref = _context.thread_cache.get_ref(req.arguments.variablesReference);
+    if (ref == null) {
+      _context.add_response_to(req, false, 'The variables reference ${req.arguments.variablesReference} was not found');
+      return;
+    }
+    switch(ref) {
+    case StackFrame(thread_id, frame_id):
+      _context.thread_cache.do_with_frame(thread_id, frame_id, function(msg) {
+        if (msg != null) {
+          _context.add_response_to(req, false, 'Error while getting frame $frame_id for $thread_id: $msg');
+          return;
+        }
+        // call this synchronously otherwise something else might make this leave the current frame
+        switch (_context.add_debugger_command_sync(Variables(false))) {
+          case Variables(vars):
+            var ret:Array<vscode.debugger.Data.Variable> = [];
+            for (v in vars) {
+              ret.push({
+                name: v,
+                value: '...',
+                variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v)),
+                evaluateName: v
+              });
+            }
+            _context.add_response(req, ({
+              seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+              success: true,
+              body: {
+                variables: ret
+              }
+            } : VariablesResponse));
+          case ErrorCurrentThreadNotStopped(_):
+            _context.add_response_to(req, false, 'Error while getting variables for $frame_id:$thread_id: Thread not stopped');
+            return;
+          case msg:
+            _context.add_response_to(req, false, 'Unexpected error while getting variables for $frame_id:$thread_id: $msg');
+        }
+      });
+    case StackVar(thread_id, frame_id, expr):
+      _context.thread_cache.do_with_frame(thread_id, frame_id, function(msg) {
+        if (msg != null) {
+          _context.add_response_to(req, false, 'Error while getting frame $frame_id for $thread_id: $msg');
+          return;
+        }
+        // call this synchronously otherwise something else might make this leave the current frame
+        switch (_context.add_debugger_command_sync(GetStructured(false, expr))) {
+        case Structured(structured):
+          var ret = [];
+          structured_to_vscode(thread_id, frame_id, structured, expr, ret);
+          _context.add_response(req, ({
+            seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+            success: true,
+            body: {
+              variables: ret
+            }
+          } : VariablesResponse));
+        case ErrorCurrentThreadNotStopped(_):
+          _context.add_response_to(req, false, 'Error while getting variable for $frame_id:$thread_id@$expr: Thread not stopped');
+          return;
+        case ErrorEvaluatingExpression(details):
+          _context.add_response_to(req, false, 'Error while getting variable for $frame_id:$thread_id@$expr: Error evaluating expression: $details');
+          return;
+        case _:
+          _context.add_response_to(req, false, 'Unexpected error while getting variable for $frame_id:$thread_id@$expr');
+          return;
+        }
+      });
+    }
   }
 
   private function respond_scopes(req:ScopesRequest) {
@@ -261,13 +375,17 @@ class DebugAdapter {
               }
             }
           }
-          _context.add_response(req, ({
-            seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
-            success: true,
-            body: {
-              scopes: ret
-            }
-          } : ScopesResponse));
+          if (ret.length == 0) {
+            _context.add_response_to(req, false, 'No scope for frame $frame_id and thread $thread_id was found');
+          } else {
+            _context.add_response(req, ({
+              seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+              success: true,
+              body: {
+                scopes: ret
+              }
+            } : ScopesResponse));
+          }
         case ErrorCurrentThreadNotStopped(_):
           _context.add_response_to(req, false, 'Thread $thread_id is not stopped');
           return;
@@ -286,7 +404,7 @@ class DebugAdapter {
         case ThreadsWhere(list):
           switch(list) {
           case Terminator:
-            _context.add_response_to(req, false, 'Unexpected ThreadsWehre response: Terminator');
+            _context.add_response_to(req, false, 'Unexpected ThreadsWhere response: Terminator');
             return;
           case Where(num, status, frame_list, next):
             Log.assert(num == thread_id, 'Requested $thread_id - got $num');

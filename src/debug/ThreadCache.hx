@@ -42,6 +42,10 @@ class ThreadCache {
     _cached = Terminator;
   }
 
+  public function get_ref(ref_id:Int) {
+    return _var_refs[ref_id];
+  }
+
   public function do_with_frame(thread_id:Int, frame_id:Int, cb:Null<debugger.IController.Message>->Void) {
     do_with_thread(thread_id, function(msg) {
       if (msg != null) {

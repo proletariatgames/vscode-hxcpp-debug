@@ -255,4 +255,28 @@ class Context {
     lock.wait(timeout);
     return ret;
   }
+
+  public function add_debugger_commands_async(cmds:Array<Command>, cb:Array<debugger.IController.Message>->Void, ?callOnMainThread=true) {
+    if (!callOnMainThread) {
+      var oldCb = cb;
+      cb = function(msgs) add_main_thread_callback(oldCb.bind(msgs));
+    }
+    var mutex = new cpp.vm.Mutex(), 
+        ret = [],
+        count = 0,
+        len = cmds.length;
+    for (i in 0...cmds.length) {
+      var cmd = cmds[i];
+      add_debugger_command(cmd, function(msg) {
+        mutex.acquire();
+        count++;
+        ret[i] = msg;
+        var shouldCall = count == len;
+        mutex.release();
+        if (shouldCall) {
+          cb(ret);
+        }
+      }, false);
+    }
+  }
 }
