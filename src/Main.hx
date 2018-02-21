@@ -1,33 +1,9 @@
 package;
 
-import haxe.io.Input;
-import haxe.io.Output;
-import haxe.io.Bytes;
-import haxe.io.Path;
-
-import sys.FileSystem;
-
-import haxe.ds.StringMap;
-import haxe.ds.IntMap;
-
-import sys.io.Process;
-import sys.FileSystem;
-
-import utils.Globals;
+import utils.Tools;
 import utils.Log;
 
-import cpp.vm.Thread;
-import cpp.vm.Deque;
-import cpp.vm.Mutex;
-
-import debugger.IController;
-
 import vscode.debugger.Data;
-
-using Lambda;
-using StringTools;
-
-typedef DirtyFlag = Bool;
 
 class Main {
   static function main() {
@@ -35,31 +11,24 @@ class Main {
       Log.log(Std.string(str), pos);
     }
     try {
-      new MyDebugAdapter().loop();
+      new DebugAdapter().loop();
     } catch(e:Dynamic) {
       Log.fatal('Debugger: Error on main thread: $e');
     }
   }
 }
 
-class MyDebugAdapter {
-
+class DebugAdapter {
   var _output_thread_started:Bool;
-  var _context:DebugContext;
+  var _context:debug.Context;
 
   public function new() {
-    this._context = new DebugContext();
-    if (Globals.get_settings().debugOutput != null) {
-      start_output_thread();
-    }
-    threads.StdinProcessor.spawn_thread();
-    threads.StdoutProcessor.spawn_thread();
-    threads.Worker.create_workers(5);
+    this._context = new debug.Context();
   }
 
   public function loop() {
     Log.log('Starting');
-    var initialize:InitializeRequest = switch(Globals.get_next_input(true)) {
+    var initialize:InitializeRequest = switch(_context.get_next_input(true)) {
       case VSCodeRequest(req):
         cast req;
       case _: throw 'assert'; // should never happen
@@ -87,26 +56,26 @@ class MyDebugAdapter {
         supportsLoadedSourcesRequest: true
       }
     };
-    Globals.add_response(initialize, resp);
+    _context.add_response(initialize, resp);
 
-    var launch_or_attach:Request = switch(Globals.get_next_input(true)) {
+    var launch_or_attach:Request = switch(_context.get_next_input(true)) {
       case VSCodeRequest(req):
         cast req;
       case _: throw 'assert'; // should never happen
     };
 
     var port = this.launch_or_attach(launch_or_attach);
-    var settings = Globals.get_settings();
+    var settings = _context.get_settings();
     var host = 'localhost';
     if (settings.host != null) {
       host = settings.host;
     }
 
-    threads.DebugConnector.connect_and_create_threads(host, port, settings.timeout);
+    _context.connect_debug(host, port, settings.timeout);
 
     setup_internal_breakpoints();
 
-    Globals.add_event( ({
+    _context.add_event( ({
       seq: 0,
       type: Event,
       event: Initialized,
@@ -120,7 +89,7 @@ class MyDebugAdapter {
         after_configuration_done = [];
 
     while(true) {
-      var input = Globals.get_next_input(true);
+      var input = _context.get_next_input(true);
       if (input == null) {
         break;
       }
@@ -153,7 +122,7 @@ class MyDebugAdapter {
             // get thread stopped reason
             if (first_break) {
               first_break = false;
-              Globals.add_event(( {
+              _context.add_event(( {
                 seq: 0,
                 type: Event,
                 event: Stopped,
@@ -212,10 +181,10 @@ class MyDebugAdapter {
           case ExceptionInfo:
           case ConfigurationDone:
             Log.verbose('Configuration Done');
-            Globals.add_response_to(req, true);
+            _context.add_response_to(req, true);
             configuration_done = true;
             for (input in after_configuration_done) {
-              Globals.add_back_input(input);
+              _context.add_input(input);
             }
           case unsupported:
             Log.warn('Debugger: Unsupported command ${req.command}');
@@ -237,17 +206,17 @@ class MyDebugAdapter {
   }
 
   private function call_and_respond(req:Request, cmd:debugger.IController.Command, ?reset_cache:Bool=true) {
-    Globals.add_debugger_command(cmd, function(res) {
+    _context.add_debugger_command(cmd, function(res) {
       switch(res) {
       case OK:
         if (reset_cache) {
           _context.thread_cache.reset();
         }
-        Globals.add_response_to(req, true);
+        _context.add_response_to(req, true);
       case ErrorCurrentThreadNotStopped(num):
-        Globals.add_response_to(req, false, 'Error while executing $cmd: Current thread ($num) is not stopped');
+        _context.add_response_to(req, false, 'Error while executing $cmd: Current thread ($num) is not stopped');
       case unexpected:
-        Globals.add_response_to(req, false, 'Unexpected response to $cmd: $unexpected');
+        _context.add_response_to(req, false, 'Unexpected response to $cmd: $unexpected');
       }
     });
   }
@@ -266,7 +235,7 @@ class MyDebugAdapter {
         case ThreadsWhere(list):
           switch(list) {
           case Terminator:
-            Globals.add_response_to(req, false, 'Unexpected ThreadsWehre response: Terminator');
+            _context.add_response_to(req, false, 'Unexpected ThreadsWehre response: Terminator');
             return;
           case Where(num, status, frame_list, next):
             Log.assert(num == thread_id, 'Requested $thread_id - got $num');
@@ -292,7 +261,7 @@ class MyDebugAdapter {
               }
             }
           }
-          Globals.add_response(req, ({
+          _context.add_response(req, ({
             seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
             success: true,
             body: {
@@ -300,10 +269,10 @@ class MyDebugAdapter {
             }
           } : ScopesResponse));
         case ErrorCurrentThreadNotStopped(_):
-          Globals.add_response_to(req, false, 'Thread $thread_id is not stopped');
+          _context.add_response_to(req, false, 'Thread $thread_id is not stopped');
           return;
         case unexpected:
-          Globals.add_response_to(req, false, 'Unexpected response when getting current thread location: $unexpected');
+          _context.add_response_to(req, false, 'Unexpected response when getting current thread location: $unexpected');
           return;
       }
     });
@@ -317,7 +286,7 @@ class MyDebugAdapter {
         case ThreadsWhere(list):
           switch(list) {
           case Terminator:
-            Globals.add_response_to(req, false, 'Unexpected ThreadsWehre response: Terminator');
+            _context.add_response_to(req, false, 'Unexpected ThreadsWehre response: Terminator');
             return;
           case Where(num, status, frame_list, next):
             Log.assert(num == thread_id, 'Requested $thread_id - got $num');
@@ -343,7 +312,7 @@ class MyDebugAdapter {
               }
             }
           }
-          Globals.add_response(req, ({
+          _context.add_response(req, ({
             seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
             success: true,
             body: {
@@ -351,10 +320,10 @@ class MyDebugAdapter {
             }
           } : StackTraceResponse));
         case ErrorCurrentThreadNotStopped(_):
-          Globals.add_response_to(req, false, 'Thread $thread_id is not stopped');
+          _context.add_response_to(req, false, 'Thread $thread_id is not stopped');
           return;
         case unexpected:
-          Globals.add_response_to(req, false, 'Unexpected response when getting current thread location: $unexpected');
+          _context.add_response_to(req, false, 'Unexpected response when getting current thread location: $unexpected');
           return;
       }
     });
@@ -377,18 +346,18 @@ class MyDebugAdapter {
         }
       case unexpected:
         Log.error('Debugger: Unexpected response to WhereAllThreads: $unexpected');
-        Globals.add_response_to(req, false, 'Unexpected debugger response $unexpected');
-        if (cb != null) Globals.add_main_thread_callback(cb);
+        _context.add_response_to(req, false, 'Unexpected debugger response $unexpected');
+        if (cb != null) _context.add_main_thread_callback(cb);
         return;
       }
-      Globals.add_response(req, ({
+      _context.add_response(req, ({
         seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
         success: true,
         body: {
           threads: ret
         }
       } : ThreadsResponse));
-      if (cb != null) Globals.add_main_thread_callback(cb);
+      if (cb != null) _context.add_main_thread_callback(cb);
     });
   }
 
@@ -440,7 +409,7 @@ class MyDebugAdapter {
           should_break = false;
           return;
         case Conditional(expr):
-          switch (Globals.add_debugger_command_sync(PrintExpression(false, expr))) {
+          switch (_context.add_debugger_command_sync(PrintExpression(false, expr))) {
           case Value(_, type, value):
             if (type != 'Bool') {
               msg = 'This conditional breakpoint did not return a Bool. It returned $type';
@@ -463,7 +432,7 @@ class MyDebugAdapter {
       }
 
       if (should_break) {
-        Globals.add_event(( {
+        _context.add_event(( {
           seq: 0,
           type: Event,
           event: Stopped,
@@ -484,14 +453,14 @@ class MyDebugAdapter {
     switch(launch_or_attach.command) {
     case Launch:
       var launch:LaunchRequest = cast launch_or_attach;
-      var settings = Globals.get_settings();
+      var settings = _context.get_settings();
       for (field in Reflect.fields(launch.arguments)) {
         var curField = Reflect.field(settings, field);
         if (curField == null) {
           Reflect.setField(settings, field, Reflect.field(launch.arguments, field));
         }
       }
-      start_output_thread();
+      _context.start_recorder_thread();
 
       // compile
       function change_terminal_args(args:Array<String>) {
@@ -508,17 +477,17 @@ class MyDebugAdapter {
         }
 
         var args = curSettings.compile.args.copy();
-        var ret = Globals.spawn_process_sync(args.shift(), args, curSettings.compileDir);
+        var ret = utils.Tools.spawn_process_sync(args.shift(), args, curSettings.compileDir);
         if (ret != 0) {
           Log.error('Compilation failed');
-          Globals.terminate(1);
+          _context.terminate(1);
         }
       }
 
       // run
       if (curSettings.run == null) {
         Log.log('Terminating: There is nothing to run');
-        Globals.terminate(0);
+        _context.terminate(0);
       }
       if (curSettings.run.cwd == null) {
         Log.fatal('`run.cwd` must be set');
@@ -538,7 +507,7 @@ class MyDebugAdapter {
       }
       envs["HXCPP_DEBUGGER_PORT"] = port + "";
 
-      Globals.add_request( ({
+      _context.add_request( ({
         seq: 0,
         type: Request,
         command: RunInTerminal,
@@ -552,7 +521,7 @@ class MyDebugAdapter {
         var res:RunInTerminalResponse = cast res;
         if (!res.success) {
           Log.log('Command output: ${res.message}');
-          Globals.terminate(1);
+          _context.terminate(1);
         }
         trace(res.body);
       });
@@ -560,14 +529,14 @@ class MyDebugAdapter {
     case Attach:
       var attach:AttachRequest = cast launch_or_attach;
 
-      var settings = Globals.get_settings();
+      var settings = _context.get_settings();
       for (field in Reflect.fields(attach.arguments)) {
         var curField = Reflect.field(settings, field);
         if (curField == null) {
           Reflect.setField(settings, field, Reflect.field(attach.arguments, field));
         }
       }
-      start_output_thread();
+      _context.start_recorder_thread();
 
       var curSettings:utils.Settings.AttachSettings = cast settings;
       port = curSettings.port;
@@ -589,7 +558,7 @@ class MyDebugAdapter {
   private function on_new_classpaths() {
     Log.verbose('Receiving new classpaths');
 
-    switch(Globals.add_debugger_command_sync(GetStructured(false, 'classpaths'))) {
+    switch(_context.add_debugger_command_sync(GetStructured(false, 'classpaths'))) {
     case Structured(List(_Array, lst)):
       var arr = [];
       var lst = lst;
@@ -610,7 +579,7 @@ class MyDebugAdapter {
       Log.error('Unexpected response when getting new classpaths: $unexpected');
     }
 
-    switch (Globals.add_debugger_command_sync(Continue(1))) {
+    switch (_context.add_debugger_command_sync(Continue(1))) {
     case OK:
     case ErrorCurrentThreadNotStopped(n):
       Log.fatal('Internal classpaths load: Current thread is not stopped ($n)');
@@ -623,7 +592,7 @@ class MyDebugAdapter {
 
   private function on_cppia_load() {
     Log.log('Cppia load call detected');
-    // Log.verbose(Globals.add_debugger_command_sync(WhereCurrentThread(false)) +'');
+    // Log.verbose(_context.add_debugger_command_sync(WhereCurrentThread(false)) +'');
     // update files
     Log.verbose('Updating source files');
     this._context.query_source_files();
@@ -631,7 +600,7 @@ class MyDebugAdapter {
     Log.verbose('Refreshing breakpoints');
     this._context.breakpoints.refresh_breakpoints();
     // continue
-    switch (Globals.add_debugger_command_sync(Continue(1))) {
+    switch (_context.add_debugger_command_sync(Continue(1))) {
     case OK:
     case ErrorCurrentThreadNotStopped(n):
       Log.fatal('Internal cppia load: Current thread is not stopped ($n)');
@@ -656,21 +625,6 @@ class MyDebugAdapter {
     }
   }
 
-  private function start_output_thread() {
-    var settings = Globals.get_settings();
-    if (!_output_thread_started && settings.debugOutput != null) {
-      _output_thread_started = true;
-      var out = settings.debugOutput;
-      if (!FileSystem.exists(out)) {
-        FileSystem.createDirectory(out);
-      }
-      if (FileSystem.isDirectory(out)) {
-        out += '/' + DateTools.format(Date.now(), '%Y%m%d_%H%M%S_log.txt');
-      }
-
-      threads.Recorder.spawn_thread(out);
-    }
-  }
 }
 
 // class DebugAdapter {
@@ -804,7 +758,7 @@ class MyDebugAdapter {
 
 //   function send_response(response:Dynamic):Void
 //   {
-//     utils.Globals.add_stdout(response);
+//     _context.add_stdout(response);
 // //     var json:String = haxe.format.JsonPrinter.print(response);
 // //     var b = Bytes.ofString(json);
 
@@ -1857,609 +1811,3 @@ class MyDebugAdapter {
 //     threads.remove(t.id);
 //   }
 // }
-
-class DebugContext {
-  public var main_thread(default, null):cpp.vm.Thread;
-  public var source_files(default, null):SourceFiles;
-  public var breakpoints(default, null):Breakpoints;
-  public var thread_cache(default, null):ThreadCache;
-
-  public function new() {
-    this.main_thread = cpp.vm.Thread.current();
-    this.source_files = new SourceFiles(null);
-    this.breakpoints = new Breakpoints(this);
-    this.thread_cache = new ThreadCache();
-  }
-
-  public function query_source_files() {
-    var files = switch (Globals.add_debugger_command_sync(Files)) {
-      case Files(f): f;
-      case unexpected:
-        Log.fatal('Debugger: Unexpected connector response to Files request: $unexpected');
-    };
-    var fullPath = switch (Globals.add_debugger_command_sync(FilesFullPath)) {
-      case Files(f): f;
-      case unexpected:
-        Log.fatal('Debugger: Unexpected connector response to Files request: $unexpected');
-    };
-
-    this.source_files = new SourceFiles(this.source_files.classpaths);
-    this.source_files.update_sources(files, fullPath);
-  }
-}
-
-enum VarRef {
-  StackFrame(thread_id:Int, frame_id:Int);
-  StackVar(thread_id:Int, frame_id:Int, expr:String);
-}
-
-class ThreadCache {
-  var _current_thread:Int;
-  var _current_frame:Int;
-  var _cached:debugger.IController.ThreadWhereList;
-  var _current_thread_mutex:cpp.vm.Mutex;
-  var _cache_lock:cpp.vm.Lock;
-  var _var_refs:Array<VarRef>;
-  var _var_ref_map:Map<VarRef, Int>;
-  var _var_ref_len = 0;
-
-  public function new() {
-    _current_thread_mutex = new cpp.vm.Mutex();
-    _cache_lock = new cpp.vm.Lock();
-    _cache_lock.release();
-    _cached = Terminator;
-    _var_refs = [];
-    _var_ref_map = new Map();
-  }
-
-  public function get_or_create_var_ref(vr:VarRef):Int {
-    _current_thread_mutex.acquire();
-    switch(vr) {
-    case StackVar(_, _, expr) if (expr.indexOf('.') >= 0 || expr.indexOf('(') >= 0 || expr.indexOf('[') >= 0): // don't even bother checking
-      var newRef = _var_refs.push(vr) - 1;
-      _current_thread_mutex.release();
-      return newRef;
-    case _:
-
-    }
-    var existing = _var_ref_map[vr];
-    if (existing != null) {
-      _current_thread_mutex.release();
-      return existing;
-    }
-    var newRef = _var_refs.push(vr) - 1;
-    _var_ref_map[vr] = newRef;
-    _current_thread_mutex.release();
-    return newRef;
-  }
-
-  public function reset() {
-    _cache_lock.wait();
-    _cached = Terminator;
-    _cache_lock.release();
-  }
-
-  public function do_with_frame(thread_id:Int, frame_id:Int, cb:Null<debugger.IController.Message>->Void) {
-    do_with_thread(thread_id, function(msg) {
-      if (msg != null) {
-        cb(msg);
-        return;
-      }
-      if (_current_frame == frame_id) {
-        cb(null);
-      } else {
-        switch(Globals.add_debugger_command_sync(SetFrame(frame_id))) {
-        case ThreadLocation(_):
-          _current_frame = frame_id;
-          cb(null);
-        case err:
-          cb(err);
-        }
-      }
-    });
-  }
-
-  public function get_threads_where(cb:debugger.IController.Message->Void) {
-    _cache_lock.wait();
-    Globals.add_debugger_command(WhereAllThreads, function(msg) {
-      switch (msg) {
-      case ThreadsWhere(list):
-        _cached = list;
-      case _:
-        _cached = Terminator;
-      }
-      _cache_lock.release();
-      cb(msg);
-    });
-  }
-
-  public function get_thread_info(number:Int, cb:debugger.IController.Message->Void) {
-    _cache_lock.wait();
-    var cache = _cached;
-    while (cache != null) {
-      switch(cache) {
-      case Terminator:
-        break;
-      case Where(num, _, _, next):
-        if (num == number) {
-          _cache_lock.release();
-          cb(ThreadsWhere(cache));
-          return;
-        }
-        cache = next;
-      }
-    }
-    do_with_thread(number, function(msg) {
-      if (msg != null) {
-        _cache_lock.release();
-        cb(msg);
-        return;
-      }
-      var ret = Globals.add_debugger_command_sync(WhereCurrentThread(false));
-      switch(ret) {
-      case ThreadsWhere(Where(num,status,frame_list,next)):
-        _cached = Where(num,status,frame_list,_cached);
-      case _:
-      }
-      _cache_lock.release();
-      cb(ret);
-    });
-  }
-
-  public function do_with_thread(number:Int, fn:Null<debugger.IController.Message>->Void) {
-    _current_thread_mutex.acquire();
-    var err = null;
-    if (_current_thread != number) {
-      var msg = Globals.add_debugger_command_sync(SetCurrentThread(number));
-      switch(msg) {
-        case ThreadLocation(_,stack_frame_id,_,_,_,_):
-          _current_thread = number;        
-          _current_frame = stack_frame_id;
-        case OK:
-          _current_thread = number;        
-          _current_frame = -1; // apparently this happens if the thread is running
-        case e:
-          err = e;
-      }
-    }
-    fn(err);
-    _current_thread_mutex.release();
-  }
-}
-
-enum BreakpointOnBreak {
-  Internal(fn:Void->Void);
-  Normal;
-  Conditional(exprCondition:String); 
-}
-
-enum BreakpointKind {
-  LineBr(file:String, line:Int);
-  FuncBr(cls:String, fn:String);
-}
-
-enum BreakpointStatus {
-  Sending;
-  Active;
-  Disabled;
-  NotFound;
-  Error(msg:debugger.IController.Message);
-  CustomError(msg:String);
-}
-
-typedef Breakpoint = {
-  internal_id:Int,
-  ?hxcpp_id:Null<Int>,
-
-  on_break:BreakpointOnBreak,
-  kind:BreakpointKind,
-  status:BreakpointStatus,
-}
-
-class Breakpoints {
-  var _context:DebugContext;
-  var _internal_id = 0;
-
-  var _breakpoints:Map<Int, Breakpoint>;
-  var _breakpoints_by_kind:Map<String, Breakpoint>;
-  var _hxcpp_to_internal:Map<Int, Int> = new Map();
-  var _bp_mutex:cpp.vm.Mutex;
-
-  var _ready:cpp.vm.Deque<{ internal_id: Int, response:debugger.IController.Message }>;
-  var _wait_amount:Int = 0;
-
-  public function new(ctx:DebugContext) {
-    _context = ctx;
-
-    _ready = new cpp.vm.Deque();
-    _breakpoints = new Map();
-    _breakpoints_by_kind = new Map();
-    _bp_mutex = new cpp.vm.Mutex();
-  }
-
-  public function get_breakpoint_from_hxcpp(hxcpp_id:Int):Breakpoint {
-    _bp_mutex.acquire();
-    var ret = _breakpoints[_hxcpp_to_internal[hxcpp_id]];
-    _bp_mutex.release();
-    return ret;
-  }
-
-  public function get_breakpoint(internal_id:Int):Breakpoint {
-    _bp_mutex.acquire();
-    var ret = _breakpoints[internal_id];
-    _bp_mutex.release();
-    return ret;
-  }
-
-  private function set_breakpoint(internal_id:Int, bp:Breakpoint) {
-    _bp_mutex.acquire();
-    _breakpoints[internal_id] = bp;
-    _bp_mutex.release();
-  }
-
-  public function add_breakpoint(on_break:BreakpointOnBreak, kind:BreakpointKind) {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Breakpoint added on a helper thread");
-    var desc = Std.string(kind);
-    var breakpoint = _breakpoints_by_kind[desc];
-    if (breakpoint == null) {
-      breakpoint = { internal_id: _internal_id++, kind:kind, on_break:on_break, status:Sending };
-      Log.verbose('Adding new breakpoint $breakpoint');
-      cmd_add_breakpoint(breakpoint);
-    } else {
-      Log.verbose('Breakpoint $kind already exists');
-      switch [on_break, breakpoint.on_break] {
-        case [Internal(_), Internal(_)]:
-          breakpoint.on_break = on_break;
-        case [Internal(_), _] | [_, Internal(_)]:
-          breakpoint.status = CustomError('Cannot replace internal breakpoint');
-        case _:
-          breakpoint.on_break = on_break;
-      }
-    }
-    return breakpoint.internal_id;
-  }
-
-  private function delete_breakpoint(internal_id:Int) {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Calling thread is not main thread");
-    Log.very_verbose('delete_breakpoint($internal_id)');
-    var bp = this._breakpoints[internal_id];
-    if (bp == null) {
-      Log.verbose('deleting an inexistent breakpoint $internal_id');
-      return false;
-    }
-
-    if (bp.hxcpp_id != null) {
-      _wait_amount++;
-      Globals.add_debugger_command(DeleteBreakpointRange(bp.hxcpp_id, bp.hxcpp_id), function(msg) {
-        _ready.add(null);
-      });
-    } else {
-      Log.verbose('deleting an inactive breakpoint');
-    }
-
-    _bp_mutex.acquire();
-    this._breakpoints.remove(internal_id);
-    _bp_mutex.release();
-    this._breakpoints_by_kind.remove(Std.string(bp.kind));
-    return true;
-  }
-
-  public function vscode_set_breakpoints(request:SetBreakpointsRequest):Void {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Setting breakpoints on a different thread");
-    wait_all_added();
-    // first of all, delete all unreferenced breakpoints
-    var full_path = _context.source_files.normalize_full_path(request.arguments.source.path),
-        to_delete = [];
-    var lines = request.arguments.breakpoints;
-    for (bp in _breakpoints) {
-      if (bp.on_break.match(Internal(_))) continue;
-      switch(bp.kind) {
-      case LineBr(file, line) if (file == full_path):
-        if (lines == null || !lines.exists(function(src) return src.line == line)) {
-          to_delete.push(bp);
-        }
-      case _:
-      }
-    }
-
-    for (bp in to_delete) {
-      delete_breakpoint(bp.internal_id);
-    }
-    var ids = [];
-    for (line in lines) {
-      var on_break = line.condition != null ? Conditional(line.condition) : Normal;
-      ids.push(this.add_breakpoint(on_break, LineBr(full_path, line.line)));
-    }
-    
-    var bps = [];
-    var ret:SetBreakpointsResponse = { type: Response, seq:0, request_seq: request.seq, success:true, command: Std.string(request.command), body: { breakpoints: bps } };
-    if (ids.length > 0) {
-      wait_all_added();
-      for (i in 0...lines.length) {
-        var ln = lines[i];
-        var id = ids[i];
-        var bp = _breakpoints[id];
-        var msg = null;
-        if (bp.hxcpp_id == null) {
-          switch(bp.status) {
-            case NotFound:
-              msg = 'This source was not found on the binary. It might be loaded dynamically by cppia';
-            case Error(err):
-              msg = 'Unexpected debugger response $err';
-            case CustomError(err):
-              msg = err;
-            case _:
-              Log.error('Unexpected status ${bp.status} for breakpoint $id');
-          }
-        }
-
-        bps.push({ id: id, verified:bp.hxcpp_id != null, message: msg, line:ln.line });
-      }
-    }
-
-    Globals.add_response(request, ret);
-  }
-
-  public function vscode_set_fn_breakpoints(request:SetFunctionBreakpointsRequest):Void {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Setting breakpoints on a different thread");
-    wait_all_added();
-    // first of all, delete all unreferenced breakpoints
-    var to_delete = [];
-    var bps = request.arguments.breakpoints;
-    for (bp in _breakpoints) {
-      if (bp.on_break.match(Internal(_))) continue;
-      switch(bp.kind) {
-      case FuncBr(c,f):
-        if (!request.arguments.breakpoints.exists(function(bp) return bp.name == '$c.$f')) {
-          to_delete.push(bp);
-        }
-      case _:
-      }
-    }
-
-    for (bp in to_delete) {
-      delete_breakpoint(bp.internal_id);
-    }
-    var ids = [];
-    for (bp in bps) {
-      var on_break = bp.condition != null ? Conditional(bp.condition) : Normal;
-      var split = null, chr = null;
-      if (bp.name.startsWith('/')) {
-        split = ~/[^\\]\//.split(bp.name);
-        chr = '/';
-      } else {
-        split = bp.name.split('.');
-        chr = '.';
-      }
-      var fn = split.pop(),
-          cls = split.join(chr);
-      ids.push(this.add_breakpoint(on_break, FuncBr(cls, fn)));
-    }
-    
-    var bps = [];
-    var ret:SetFunctionBreakpointsResponse = { type: Response, seq:0, request_seq: request.seq, success:true, command: Std.string(request.command), body: { breakpoints: bps } };
-    if (ids.length > 0) {
-      wait_all_added();
-      for (i in 0...bps.length) {
-        var ln = bps[i];
-        var id = ids[i];
-        var bp = _breakpoints[id];
-        var msg = null;
-        if (bp.hxcpp_id == null) {
-          switch(bp.status) {
-            case NotFound:
-              msg = 'This source was not found on the binary. It might be loaded dynamically by cppia';
-            case Error(err):
-              msg = 'Unexpected debugger response $err';
-            case CustomError(err):
-              msg = err;
-            case _:
-              Log.error('Unexpected status ${bp.status} for breakpoint $id');
-          }
-        }
-
-        bps.push({ id: id, verified:bp.hxcpp_id != null, message: msg, line:ln.line });
-      }
-    }
-
-    Globals.add_response(request, ret);
-  }
-
-  private function cmd_add_breakpoint(bp:Breakpoint) {
-    _wait_amount++;
-    var internal_id = bp.internal_id;
-    _bp_mutex.acquire();
-    _breakpoints[internal_id] = bp;
-    _bp_mutex.release();
-    _breakpoints_by_kind[Std.string(bp.kind)] = bp;
-    var cmd = switch (bp.kind) {
-      case LineBr(file, line):
-        var source_to_send = _context.source_files.get_source_path(file);
-        Command.AddFileLineBreakpoint(source_to_send, line);
-      case FuncBr(cls, fn):
-        Command.AddClassFunctionBreakpoint(cls, fn);
-    }
-    Globals.add_debugger_command(cmd, function(ret) {
-      _ready.add({ response: ret, internal_id:internal_id });
-    });
-  }
-
-  public function refresh_breakpoints() {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Breakpoint added on a helper thread");
-    if (_wait_amount != 0) {
-      wait_all_added();
-    }
-
-    for (bp in _breakpoints) {
-      var resend = false;
-      switch(bp.status) {
-      case Sending:
-        Log.error('Debugger: Unexpected breakpoint with `sending` status $bp');
-      case NotFound | Error(_) | CustomError(_):
-        resend = true;
-      case Active:
-        switch(bp.kind) {
-        case FuncBr(c, f) if (c.startsWith('/') || f.startsWith('/')):
-          resend = true;
-        case _:
-        }
-      case Disabled:
-      }
-      if (resend) {
-        cmd_add_breakpoint(bp);
-      }
-    }
-  }
-
-  public function wait_all_added() {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "wait_all_added called on a helper thread");
-    for (i in 0..._wait_amount) {
-      var id = _ready.pop(true);
-      if (id != null) {
-        var bp = _breakpoints[id.internal_id];
-        if (bp == null) {
-          Log.error('Debugger error: Breakpoint ${id.internal_id} just got a response, but it is not registered!');
-        }
-        switch(id.response) {
-        case FileLineBreakpointNumber(num):
-          bp.status = Active;
-          bp.hxcpp_id = num;
-          _bp_mutex.acquire();
-          _hxcpp_to_internal[num] = bp.internal_id;
-          _bp_mutex.release();
-        case ClassFunctionBreakpointNumber(num, bad_classes):
-          if (bad_classes != null && bad_classes.length > 0) {
-            Log.verbose('Found some bad classes while setting breakpoint: $bad_classes');
-          }
-          bp.status = Active;
-          bp.hxcpp_id = num;
-          _bp_mutex.acquire();
-          _hxcpp_to_internal[num] = bp.internal_id;
-          _bp_mutex.release();
-        case ErrorBadFunctionNameRegex(details):
-          bp.status = CustomError('Bad function name regex: $details');
-        case ErrorBadClassNameRegex(details):
-          bp.status = CustomError('Bad class name regex: $details');
-        case ErrorNoMatchingFunctions(_,_,bad_classes):
-          if (bad_classes != null && bad_classes.length > 0) {
-            Log.verbose('Found some bad classes while setting breakpoint: $bad_classes');
-          }
-          bp.status = NotFound;
-        case ErrorNoSuchFile(_):
-          bp.status = NotFound;
-        case unexpected:
-          Log.error('Unexpected response ${unexpected} for breakpoint $bp');
-          bp.status = Error(unexpected);
-        }
-      }
-    }
-    _wait_amount = 0;
-  }
-}
-
-class SourceFiles {
-  public var classpaths(default, null):Array<String>;
-  var _sources:Array<String>;
-  var _original_sources:Array<String>;
-  var _full_sources:Array<String>;
-
-  public function new(classpaths) {
-    this.classpaths = classpaths;
-  }
-
-  public function add_classpaths(arr:Array<String>) {
-    if (arr == null) {
-      return;
-    }
-
-    if (classpaths == null) {
-      classpaths = arr;
-    }
-    for (cp in arr) {
-      if (classpaths.indexOf(cp) < 0) {
-        classpaths.push(cp);
-      }
-    }
-  }
-
-  public function update_sources(sources:Array<String>, full_sources:Array<String>) {
-    add_classpaths(Globals.get_settings().classpaths);
-    this._original_sources = sources;
-    this._sources = [ for (source in sources) haxe.io.Path.normalize(source) ];
-    this._full_sources = [ for (source in full_sources) normalize_full_path(source) ];
-  }
-
-  public function normalize_full_path(source:String) {
-    return try {
-      if (haxe.io.Path.isAbsolute(source)) {
-        haxe.io.Path.normalize(FileSystem.fullPath(source));
-      } else {
-        haxe.io.Path.normalize(source);
-      }
-    }
-    catch(e:Dynamic) {
-      haxe.io.Path.normalize(source);
-    }
-  }
-
-  public function get_source_path(full_path:String) {
-    var normalized = normalize_full_path(full_path).toLowerCase();
-    for (i in 0..._full_sources.length) {
-      if (_full_sources[i].toLowerCase() == normalized) {
-        Log.very_verbose('get_source_path($full_path) = ${_original_sources[i]}');
-        return _original_sources[i];
-      }
-    }
-    // this might be a cppia source, which doesn't contain the full path
-    for (i in 0..._full_sources.length) {
-      if (normalized.endsWith(_full_sources[i].toLowerCase())) {
-        Log.very_verbose('cppia: get_source_path($full_path) = ${_original_sources[i]}');
-        return _original_sources[i];
-      }
-    }
-
-    Log.verbose(Std.string(_full_sources));
-    Log.verbose('get_source_path($full_path -> $normalized) could not find any candidate');
-    return normalized;
-  }
-
-  public function resolve_source_path(name:String) {
-    if (name.trim() == '?') {
-      return name;
-    }
-    var normalized = haxe.io.Path.normalize(name);
-    var ret = null;
-    var idx = _sources.indexOf(name);
-    if (idx >= 0) {
-      ret = _full_sources[idx];
-    }
-    if (ret == null) {
-      ret = _full_sources.find(function(full) return full.endsWith(normalized));
-    }
-    if (ret == null) {
-      Log.error('Debugger: Could not find the path to $name');
-      return name;
-    }
-    if (!sys.FileSystem.exists(ret)) {
-      // this can happen because cppia packages don't have a full path associated with them
-      if (classpaths == null) {
-        Log.error('Debugger: Could not find the full path to $name. ' +
-          'This can happen if the source was deleted or if this is a cppia package.\n' +
-          'In case this is a cppia package, consider adding `classpaths` to your configuration file ' +
-          'to specifiy the original full classpaths where the compilation took place. This way relative paths ' +
-          'can be expanded.');
-        return name;
-      } else {
-        var cp = classpaths.find(function(dir) return sys.FileSystem.exists(dir + '/' + normalized));
-        if (cp != null) {
-          return cp + '/' + normalized;
-        } else {
-          Log.error('Debugger: Could not find the full path to $name. Perhaps it was deleted, or `compileDir` references the wrong path');
-          return name;
-        }
-      }
-    } else {
-      return ret;
-    }
-  }
-}
