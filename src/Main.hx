@@ -283,7 +283,7 @@ class DebugAdapter {
         switch (_context.add_debugger_command_sync(Variables(false))) {
           case Variables(vars):
             var ret:Array<vscode.debugger.Data.Variable> = [];
-            _context.add_debugger_commands_async([for (v in vars) PrintExpression(false, v)], function(msgs) {
+            _context.add_debugger_commands_async([for (v in vars) GetStructured(false, v)], function(msgs) {
               for (i in 0...vars.length) {
                 var v = vars[i],
                     msg = msgs[i];
@@ -295,23 +295,17 @@ class DebugAdapter {
                       variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v)),
                       evaluateName: v
                     });
-                  case Value(exp, type, value):
-                    switch (type) {
-                    case 'Int', 'Float', 'String', 'Bool', 'Null', 'null':
+                  case Structured(s):
+                    switch(s) {
+                    case List(_):
                       ret.push({
                         name: v,
-                        value: value,
-                        type: type,
-                        variablesReference: 0
-                      });
-                    case _:
-                      ret.push({
-                        name: v,
-                        value: value,
-                        type: type,
+                        value: '',
                         variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v)),
                         evaluateName: v
                       });
+                    case _:
+                      structured_to_vscode(thread_id, frame_id, s, v, ret);
                     }
                   case _:
                     ret.push({
