@@ -117,7 +117,7 @@ class Breakpoints {
       _wait_amount++;
       _context.add_debugger_command(DeleteBreakpointRange(bp.hxcpp_id, bp.hxcpp_id), function(msg) {
         _ready.add(null);
-      });
+      }, false);
     } else {
       Log.verbose('deleting an inactive breakpoint');
     }
@@ -266,7 +266,7 @@ class Breakpoints {
     }
     _context.add_debugger_command(cmd, function(ret) {
       _ready.add({ response: ret, internal_id:internal_id });
-    });
+    }, false);
   }
 
   public function refresh_breakpoints() {
