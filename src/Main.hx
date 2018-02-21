@@ -158,8 +158,7 @@ class DebugAdapter {
             call_and_respond(req, Step(1));
           case StepOut:
             call_and_respond(req, Finish(1));
-          case StepBack:
-            call_and_respond(req, Finish(1));
+          // case StepBack:
           // case Goto:
           case Pause:
             call_and_respond(req, BreakNow);
@@ -176,8 +175,8 @@ class DebugAdapter {
           case Modules:
           case LoadedSources:
           case Evaluate:
-          case StepInTargets:
-          case GotoTargets:
+          // case StepInTargets:
+          // case GotoTargets:
           case ExceptionInfo:
           case ConfigurationDone:
             Log.verbose('Configuration Done');
@@ -284,21 +283,53 @@ class DebugAdapter {
         switch (_context.add_debugger_command_sync(Variables(false))) {
           case Variables(vars):
             var ret:Array<vscode.debugger.Data.Variable> = [];
-            for (v in vars) {
-              ret.push({
-                name: v,
-                value: '...',
-                variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v)),
-                evaluateName: v
-              });
-            }
-            _context.add_response(req, ({
-              seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
-              success: true,
-              body: {
-                variables: ret
+            _context.add_debugger_commands_async([for (v in vars) PrintExpression(false, v)], function(msgs) {
+              for (i in 0...vars.length) {
+                var v = vars[i],
+                    msg = msgs[i];
+                switch (msg) {
+                  case null:
+                    ret.push({
+                      name: v,
+                      value: '<err>',
+                      variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v)),
+                      evaluateName: v
+                    });
+                  case Value(exp, type, value):
+                    switch (type) {
+                    case 'Int', 'Float', 'String', 'Bool', 'Null', 'null':
+                      ret.push({
+                        name: v,
+                        value: value,
+                        type: type,
+                        variablesReference: 0
+                      });
+                    case _:
+                      ret.push({
+                        name: v,
+                        value: value,
+                        type: type,
+                        variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v)),
+                        evaluateName: v
+                      });
+                    }
+                  case _:
+                    ret.push({
+                      name: v,
+                      value: '<err>',
+                      variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v)),
+                      evaluateName: v
+                    });
+                }
               }
-            } : VariablesResponse));
+              _context.add_response(req, ({
+                seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+                success: true,
+                body: {
+                  variables: ret
+                }
+              } : VariablesResponse));
+            });
           case ErrorCurrentThreadNotStopped(_):
             _context.add_response_to(req, false, 'Error while getting variables for $frame_id:$thread_id: Thread not stopped');
             return;
@@ -362,6 +393,16 @@ class DebugAdapter {
                   ret.push({
                     name: 'Locals',
                     variablesReference: _context.thread_cache.get_or_create_var_ref(StackFrame(thread_id, frame_id)),
+                    expensive: false,
+                    source: {
+                      name: file_name,
+                      path: _context.source_files.resolve_source_path(file_name),
+                    },
+                    line: ln_num,
+                  });
+                  ret.push({
+                    name: 'Statics',
+                    variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, class_name)),
                     expensive: false,
                     source: {
                       name: file_name,
