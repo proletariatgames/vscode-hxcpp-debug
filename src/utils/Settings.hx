@@ -8,6 +8,7 @@ typedef Settings = {
     ?compileDir:String,
     ?classpaths:Array<String>,
     ?host:String,
+    ?launched:Bool,
 }
 
 typedef LaunchSettings = {

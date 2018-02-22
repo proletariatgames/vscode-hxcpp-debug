@@ -1,7 +1,10 @@
 package debug;
+import utils.Log;
+
 enum VarRef {
   StackFrame(thread_id:Int, frame_id:Int);
   StackVar(thread_id:Int, frame_id:Int, expr:String);
+  StructuredRef(thread_id:Int, frame_id:Int, expr:String, structured:debugger.IController.StructuredValue);
 }
 
 class ThreadCache {
@@ -11,20 +14,40 @@ class ThreadCache {
   var _current_frame:Int;
   var _cached:debugger.IController.ThreadWhereList;
   var _var_refs:Array<VarRef>;
+  var _var_ref_last_value:Map<Int, VarRef>;
   var _var_ref_map:Map<VarRef, Int>;
   var _var_ref_len = 0;
 
   public function new(context) {
     _cached = Terminator;
     _var_refs = [];
+    _var_ref_last_value = new Map();
     _var_ref_map = new Map();
     _context = context;
+  }
+
+  public function set_stack_var_result(id:Int, s:debugger.IController.StructuredValue) {
+    var ret = _var_refs[id-1];
+    if (ret == null) {
+      Log.error('Setting stack var result for an inexistent id $id');
+      return;
+    }
+    switch(ret) {
+      case StackVar(thread_id, frame_id, expr):
+        _var_ref_last_value[id] = StructuredRef(thread_id, frame_id, expr, s);
+      case StructuredRef(_): // no problem
+      case _:
+        Log.error('Expected StackVar, got $ret for id $id');
+    }
   }
 
   public function get_or_create_var_ref(vr:VarRef):Int {
     switch(vr) {
     case StackVar(_, _, expr) if (expr.indexOf('.') >= 0 || expr.indexOf('(') >= 0 || expr.indexOf('[') >= 0): // don't even bother checking
-      var newRef = _var_refs.push(vr) - 1;
+      var newRef = _var_refs.push(vr);
+      return newRef;
+    case StructuredRef(_):
+      var newRef = _var_refs.push(vr);
       return newRef;
     case _:
 
@@ -33,7 +56,7 @@ class ThreadCache {
     if (existing != null) {
       return existing;
     }
-    var newRef = _var_refs.push(vr) - 1;
+    var newRef = _var_refs.push(vr);
     _var_ref_map[vr] = newRef;
     return newRef;
   }
@@ -42,8 +65,16 @@ class ThreadCache {
     _cached = Terminator;
   }
 
+  public function get_last_value_ref(ref_id:Int) {
+    var ret = _var_ref_last_value[ref_id];
+    if (ret != null) {
+      return ret;
+    }
+    return _var_refs[ref_id-1];
+  }
+
   public function get_ref(ref_id:Int) {
-    return _var_refs[ref_id];
+    return _var_refs[ref_id-1];
   }
 
   public function do_with_frame(thread_id:Int, frame_id:Int, cb:Null<debugger.IController.Message>->Void) {

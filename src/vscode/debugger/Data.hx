@@ -1326,7 +1326,7 @@ typedef SetVariableResponse = {
     /**
       The type of the new value. Typically shown in the UI when hovering over the value.
     **/
-    @:optional var type : TypeEnum;
+    @:optional var type : String;
     /**
       If variablesReference is > 0, the new value is structured and its children can be retrieved by passing variablesReference to the VariablesRequest.
     **/
@@ -1532,7 +1532,7 @@ typedef EvaluateResponse = {
     /**
       The optional type of the evaluate result.
     **/
-    @:optional var type : TypeEnum;
+    @:optional var type : String;
     /**
       Properties of a evaluate result that can be used to determine how to render the result in the UI.
     **/

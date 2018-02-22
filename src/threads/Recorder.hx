@@ -24,11 +24,12 @@ class Recorder {
             break;
           }
           var buf = new StringBuf();
+          buf.add(cur.date);
           if (cur.io) {
             if (cur.input) {
-              buf.add('<--  ${cur.date}');
+              buf.add(' <--');
             } else {
-              buf.add('-->  ${cur.date}');
+              buf.add(' -->');
             }
             #if DEBUG_MESSAGES
             buf.add('\n');
@@ -43,7 +44,7 @@ class Recorder {
             buf.add('--------------------------------------------\n\n');
             #end
           } else {
-            buf.add('=== ${cur.date} ');
+            buf.add(' === ');
             switch(cur.log) {
               case VeryVerbose:
                 buf.add('[VVBOSE ] ');

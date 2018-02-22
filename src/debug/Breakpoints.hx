@@ -152,7 +152,7 @@ class Breakpoints {
     }
     var ids = [];
     for (line in lines) {
-      var on_break = line.condition != null ? Conditional(line.condition) : Normal;
+      var on_break = line.condition != null && line.condition.trim().length != 0 ? Conditional(line.condition) : Normal;
       ids.push(this.add_breakpoint(on_break, LineBr(full_path, line.line)));
     }
     
@@ -207,7 +207,7 @@ class Breakpoints {
     }
     var ids = [];
     for (bp in bps) {
-      var on_break = bp.condition != null ? Conditional(bp.condition) : Normal;
+      var on_break = bp.condition != null && bp.condition.trim().length != 0 ? Conditional(bp.condition) : Normal;
       var split = null, chr = null;
       if (bp.name.startsWith('/')) {
         split = ~/[^\\]\//.split(bp.name);

@@ -76,7 +76,7 @@ class StdinProcessor {
         } 
         catch(e:haxe.io.Error) {
           switch(e) {
-            case Custom(e) if (Std.is(e, haxe.io.Eof)):
+            case Custom(e) if (Std.is(e, haxe.io.Eof) || e == "EOF"):
               // input closed
               inputs.push(null);
               break;

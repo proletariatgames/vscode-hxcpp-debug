@@ -11,7 +11,11 @@ class Main {
       Log.verbose(Std.string(str), pos);
     }
     try {
-      new DebugAdapter().loop();
+      var last = null;
+      while (true) {
+        last = new DebugAdapter(last);
+        last.loop();
+      }
     } catch(e:Dynamic) {
       Log.fatal('Debugger: Error on main thread: $e');
     }
@@ -21,50 +25,57 @@ class Main {
 class DebugAdapter {
   var _output_thread_started:Bool;
   var _context:debug.Context;
+  var _last_reason:StoppedEventReasonEnum = Entry;
+  var _launch_or_attach:Request;
 
-  public function new() {
-    this._context = new debug.Context();
+  public function new(oldAdapter:DebugAdapter) {
+    if (oldAdapter != null) {
+      _launch_or_attach = oldAdapter._launch_or_attach;
+    }
+    this._context = oldAdapter == null ? new debug.Context() : oldAdapter._context;
   }
 
   public function loop() {
-    Log.log('Starting');
-    var initialize:InitializeRequest = switch(_context.get_next_input(true)) {
-      case VSCodeRequest(req):
-        cast req;
-      case _: throw 'assert'; // should never happen
-    };
-    if (initialize.command != Initialize) {
-      Log.fatal('vscode debugger protocol error: Expected a initialize request, got $initialize');
-    }
-    var resp:{ >Response, body:Capabilities } = {
-      seq: 0,
-      type: Response,
-      request_seq: initialize.seq,
-      command: Std.string(initialize.command),
-      success: true,
-      body: {
-        supportsConfigurationDoneRequest: true,
-        supportsFunctionBreakpoints: true,
-        supportsConditionalBreakpoints: true,
-        supportsEvaluateForHovers: true,
-        supportsStepBack: false,
-        supportsSetVariable: true,
-        supportsStepInTargetsRequest: true,
-        supportsCompletionsRequest: false, // TODO
-        supportsRestartRequest: true,
-        supportTerminateDebuggee: true,
-        supportsLoadedSourcesRequest: true
+    if (_launch_or_attach == null) {
+      Log.log('Starting');
+      var initialize:InitializeRequest = switch(_context.get_next_input(true)) {
+        case VSCodeRequest(req):
+          cast req;
+        case _: throw 'assert'; // should never happen
+      };
+      if (initialize.command != Initialize) {
+        Log.fatal('vscode debugger protocol error: Expected a initialize request, got $initialize');
       }
-    };
-    _context.add_response(initialize, resp);
+      var resp:{ >Response, body:Capabilities } = {
+        seq: 0,
+        type: Response,
+        request_seq: initialize.seq,
+        command: Std.string(initialize.command),
+        success: true,
+        body: {
+          supportsConfigurationDoneRequest: true,
+          supportsFunctionBreakpoints: true,
+          supportsConditionalBreakpoints: true,
+          supportsEvaluateForHovers: true,
+          supportsStepBack: false,
+          supportsSetVariable: true,
+          supportsStepInTargetsRequest: true,
+          supportsCompletionsRequest: false, // TODO
+          supportsRestartRequest: true,
+          supportTerminateDebuggee: true,
+          supportsLoadedSourcesRequest: true
+        }
+      };
+      _context.add_response(initialize, resp);
 
-    var launch_or_attach:Request = switch(_context.get_next_input(true)) {
-      case VSCodeRequest(req):
-        cast req;
-      case _: throw 'assert'; // should never happen
-    };
+      _launch_or_attach = switch(_context.get_next_input(true)) {
+        case VSCodeRequest(req):
+          cast req;
+        case _: throw 'assert'; // should never happen
+      };
+    }
 
-    var port = this.launch_or_attach(launch_or_attach);
+    var port = this.launch_or_attach(_launch_or_attach);
     var settings = _context.get_settings();
     var host = 'localhost';
     if (settings.host != null) {
@@ -84,8 +95,7 @@ class DebugAdapter {
     // setup the internal breakpoints
     // first of all, query the source files
     _context.query_source_files();
-    var first_break = true,
-        configuration_done = false,
+    var configuration_done = false,
         after_configuration_done = [];
 
     while(true) {
@@ -102,36 +112,60 @@ class DebugAdapter {
           if (!configuration_done) {
             after_configuration_done.push(input);
           } else {
+            _context.add_event(({
+              seq: 0, type: Event,
+              event: Thread,
+              body: {
+                reason: Started,
+                threadId: thread_number
+              }
+            } : ThreadEvent));
           }
         case ThreadTerminated(thread_number):
           if (!configuration_done) {
             after_configuration_done.push(input);
           } else {
+            _context.add_event(({
+              seq: 0, type: Event,
+              event: Thread,
+              body: {
+                reason: Exited,
+                threadId: thread_number
+              }
+            } : ThreadEvent));
           }
         case ThreadStarted(thread_number):
+          _context.thread_cache.reset();
           if (!configuration_done) {
             after_configuration_done.push(input);
           } else {
+            _context.add_event(({
+              seq: 0, type: Event,
+              event: Continued,
+              body: {
+                threadId: thread_number
+              }
+            } : ContinuedEvent));
           }
         case ThreadStopped(thread_number, stack_frame, cls_name, fn_name, file_name, ln_num):
+          _context.thread_cache.reset();
           if (!configuration_done) {
             Log.verbose('Thread stopped but initial threads answer was still not sent');
             after_configuration_done.push(input);
           } else {
-            Log.verbose('ThreadStopped($thread_number) $cls_name::$fn_name');
             // get thread stopped reason
-            if (first_break) {
-              first_break = false;
+            if (_last_reason != null) {
               _context.add_event(( {
                 seq: 0,
                 type: Event,
                 event: Stopped,
                 body: {
-                  reason: Entry,
+                  reason: _last_reason,
                   threadId: thread_number,
                   allThreadsStopped: true
                 }
               } : StoppedEvent));
+              _last_reason = null;
             } else {
               emit_thread_stopped(thread_number, stack_frame, cls_name, fn_name, file_name, ln_num);
             }
@@ -145,22 +179,39 @@ class DebugAdapter {
           var req:Request = cast req;
           switch (req.command) {
           case Restart:
+            if (_launch_or_attach.command == Launch) {
+              _context.thread_cache.reset();
+              _context.reset();
+              _context.add_event( ({
+                seq: 0,
+                type: Event,
+                event: Exited,
+                body: { exitCode: 0 }
+              } : ExitedEvent) );
+              return;
+            } else {
+              Log.fatal('Cannot restart an attached application');
+            }
           case Disconnect:
+            _context.terminate(0);
           case SetBreakpoints:
             _context.breakpoints.vscode_set_breakpoints(cast req);
           case SetFunctionBreakpoints:
             _context.breakpoints.vscode_set_fn_breakpoints(cast req);
           case Continue:
+            _last_reason = null;
             call_and_respond(req, Continue(1));
           case Next:
+            _last_reason = Step;
             call_and_respond(req, Next(1));
           case StepIn:
+            _last_reason = Step;
             call_and_respond(req, Step(1));
           case StepOut:
+            _last_reason = Step;
             call_and_respond(req, Finish(1));
-          // case StepBack:
-          // case Goto:
           case Pause:
+            _last_reason = Pause;
             call_and_respond(req, BreakNow);
           case StackTrace:
             respond_stack_trace(cast req);
@@ -169,15 +220,12 @@ class DebugAdapter {
           case Variables:
             respond_variables(cast req);
           case SetVariable:
-          case Source:
+            respond_set_variable(cast req);
           case Threads:
             respond_threads(req);
           case Modules:
-          case LoadedSources:
           case Evaluate:
-          // case StepInTargets:
-          // case GotoTargets:
-          case ExceptionInfo:
+            respond_evaluate(cast req);
           case ConfigurationDone:
             Log.verbose('Configuration Done');
             _context.add_response_to(req, true);
@@ -266,6 +314,164 @@ class DebugAdapter {
     }
   }
 
+  private static function list_type_to_string(type:debugger.IController.StructuredValueListType) {
+    return switch(type) {
+      case Anonymous: '<anonymous>';
+      case Instance(cls): cls;
+      case _Array: 'Array';
+      case Class: 'Class';
+    }
+  }
+
+  private static function is_type_string(s:debugger.IController.StructuredValue) {
+    return switch(s) {
+      case Single(TypeString | TypeClass("String"), _):
+        true;
+      case _:
+        false;
+    }
+  }
+
+  private function respond_set_variable(req:SetVariableRequest) {
+    var ref = _context.thread_cache.get_last_value_ref(req.arguments.variablesReference);
+    if (ref == null) {
+      _context.add_response_to(req, false, 'The variables reference ${req.arguments.variablesReference} was not found');
+      return;
+    }
+    var value = req.arguments.value,
+        name = req.arguments.name;
+    var thread_id,
+        frame_id,
+        expr;
+    switch(ref) {
+    case StackFrame(tid, fid):
+      thread_id = tid;
+      frame_id = fid;
+      expr = name;
+    case StackVar(tid, fid, e):
+      thread_id = tid;
+      frame_id = fid;
+      expr = e + '.' + name;
+    case StructuredRef(tid, fid, e, s):
+      thread_id = tid;
+      frame_id = fid;
+      switch(s) {
+      case Elided(_) | Single(_):
+        expr = e + '.' + name;
+      case List(list_type, lst):
+        switch(list_type) {
+        case _Array:
+          expr = e + '[' + name + ']';
+          switch(lst) {
+          case Element(_, v, _):
+            if (is_type_string(v)) {
+              value = haxe.Json.stringify(value);
+            }
+          case _:
+          }
+        case _:
+          expr = e + '.' + name;
+          var lst = lst;
+          while (true) {
+            switch (lst) {
+            case Terminator:
+              Log.verbose('Unknown name $name for list $lst');
+              break;
+            case Element(name, v, next):
+              if (name == req.arguments.name) {
+                if (is_type_string(v)) {
+                  value = haxe.Json.stringify(value);
+                }
+                break;
+              }
+              lst = next;
+            }
+          }
+        }
+      }
+    }
+    _context.thread_cache.do_with_frame(thread_id, frame_id, function(msg) {
+      if (msg != null) {
+        _context.add_response_to(req, false, 'Error while getting frame $frame_id for $thread_id: $msg');
+        return;
+      }
+      _context.add_debugger_command(SetExpression(false, expr, value), function(msg) {
+        switch (msg) {
+        case Value(_, type, value):
+          _context.add_response(req, ({
+            seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+            success: true,
+            body: {
+              value: type == 'String' ? Std.string(haxe.Json.parse(value)) : value,
+              type: type
+            }
+          } : SetVariableResponse));
+        case ErrorCurrentThreadNotStopped(_):
+          _context.add_response_to(req, false, 'Error while evaluating expression: Thread not stopped');
+          return;
+        case ErrorEvaluatingExpression(details):
+          _context.add_response_to(req, false, 'Error while evaluating expression: $details');
+          return;
+        case msg:
+          _context.add_response_to(req, false, 'Unexpected error while evaluating expression: $msg');
+          return;
+        }
+      });
+    });
+  }
+
+  private function respond_evaluate(req:EvaluateRequest) {
+    var thread_and_frame = req.arguments.frameId;
+    var thread_id = (thread_and_frame >>> 16) & 0xFFFF;
+    var frame_id = thread_and_frame & 0xFFFF;
+
+    _context.thread_cache.do_with_frame(thread_id, frame_id, function(msg) {
+      if (msg != null) {
+        _context.add_response_to(req, false, 'Error while getting frame $frame_id for $thread_id: $msg');
+        return;
+      }
+      _context.add_debugger_command(GetStructured(false, req.arguments.expression), function(msg) {
+        switch(msg) {
+          case Structured(s):
+            var resp:EvaluateResponse = {
+              seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command), success:true,
+              body: null
+            };
+            switch(s) {
+            case Elided(val_type, get_expression):
+              resp.body = {
+                result: val_type_to_string(val_type),
+                type: val_type_to_string(val_type),
+                variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, get_expression)),
+              };
+            case Single(val_type, val):
+              resp.body = {
+                result: val,
+                type: val_type_to_string(val_type),
+                variablesReference: 0,
+              };
+            case List(list_type, lst):
+              resp.body = {
+                result: list_type_to_string(list_type),
+                type: list_type_to_string(list_type),
+                variablesReference: _context.thread_cache.get_or_create_var_ref(StructuredRef(thread_id, frame_id, req.arguments.expression, s)),
+              };
+            }
+            _context.add_response(req, resp);
+          case ErrorCurrentThreadNotStopped(_):
+            _context.add_response_to(req, false, 'Error while evaluating expression: Thread not stopped');
+            return;
+          case ErrorEvaluatingExpression(details):
+            _context.add_response_to(req, false, 'Error while evaluating expression: $details');
+            return;
+          case msg:
+            _context.add_response_to(req, false, 'Unexpected error while evaluating expression: $msg');
+            return;
+        }
+      });
+    });
+  }
+
   private function respond_variables(req:VariablesRequest) {
     var ref = _context.thread_cache.get_ref(req.arguments.variablesReference);
     if (ref == null) {
@@ -273,6 +479,16 @@ class DebugAdapter {
       return;
     }
     switch(ref) {
+    case StructuredRef(thread_id, frame_id, expr, s):
+      var ret = [];
+      structured_to_vscode(thread_id, frame_id, s, expr, ret);
+      _context.add_response(req, ({
+        seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+        success: true,
+        body: {
+          variables: ret
+        }
+      } : VariablesResponse));
     case StackFrame(thread_id, frame_id):
       _context.thread_cache.do_with_frame(thread_id, frame_id, function(msg) {
         if (msg != null) {
@@ -340,6 +556,8 @@ class DebugAdapter {
         // call this synchronously otherwise something else might make this leave the current frame
         switch (_context.add_debugger_command_sync(GetStructured(false, expr))) {
         case Structured(structured):
+          _context.thread_cache.set_stack_var_result(req.arguments.variablesReference, structured);
+
           var ret = [];
           structured_to_vscode(thread_id, frame_id, structured, expr, ret);
           _context.add_response(req, ({
@@ -607,6 +825,7 @@ class DebugAdapter {
     case Launch:
       var launch:LaunchRequest = cast launch_or_attach;
       var settings = _context.get_settings();
+      settings.launched = true;
       for (field in Reflect.fields(launch.arguments)) {
         var curField = Reflect.field(settings, field);
         if (curField == null) {
@@ -745,7 +964,6 @@ class DebugAdapter {
 
   private function on_cppia_load() {
     Log.log('Cppia load call detected');
-    // Log.verbose(_context.add_debugger_command_sync(WhereCurrentThread(false)) +'');
     // update files
     Log.verbose('Updating source files');
     this._context.query_source_files();

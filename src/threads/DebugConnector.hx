@@ -6,9 +6,11 @@ import utils.Log;
 
 class DebugConnector {
   public var commands(default, null):Deque<{ cmd:Command, cb:debugger.IController.Message->Void }> = new Deque();
-  var socket_connecting:Bool = false;
+  public var connected(default, null):Bool;
+  public var socket_connecting(default, null):Bool = false;
   var input_thread:cpp.vm.Thread;
   var output_thread:cpp.vm.Thread;
+  public var listen_socket(default, null):sys.net.Socket;
 
   var _context:debug.Context;
   var _thread_spawned = false;
@@ -46,27 +48,27 @@ class DebugConnector {
       inline function timeout_reached() {
         return (timeoutSeconds != null && Sys.time() >= startTime + timeoutSeconds);
       }
-      var listenSocket =  null;
+      listen_socket =  null;
       
       do {
         try {
-          listenSocket = new sys.net.Socket();
-          listenSocket.bind(new sys.net.Host(host), port);
-          listenSocket.listen(1);
+          listen_socket = new sys.net.Socket();
+          listen_socket.bind(new sys.net.Host(host), port);
+          listen_socket.listen(1);
         }
         catch(e:Dynamic) {
           Log.log('Debugger: Failed to bind/listen on $host:$port: $e');
           Log.log('Debugger: Trying again in 3 seconds.');
           Sys.sleep(3);
-          if (listenSocket != null) {
-            listenSocket.close();
+          if (listen_socket != null) {
+            listen_socket.close();
           }
-          listenSocket = null;
+          listen_socket = null;
         }
       }
-      while (listenSocket == null && !timeout_reached());
+      while (listen_socket == null && !timeout_reached());
 
-      if (listenSocket == null) {
+      if (listen_socket == null) {
         Log.fatal('Timeout reached while listening to $host:$port');
       }
 
@@ -75,7 +77,7 @@ class DebugConnector {
       do {
         try {
           Log.log('Debugger: Listening for client connection on $host:$port....');
-          socket = listenSocket.accept();
+          socket = listen_socket.accept();
         }
         catch(e:Dynamic) {
           Log.warn('Debugger: Failed to accept connection: $e');
@@ -86,6 +88,7 @@ class DebugConnector {
       while (socket == null && !timeout_reached());
 
       var peer = socket.peer();
+      connected = true;
       Log.log("VSCHS: Received connection from " + peer.host + ".");
 
       var initLockInput = new cpp.vm.Lock(),
@@ -107,6 +110,11 @@ class DebugConnector {
                ThreadStarted(_) | ThreadStopped(_):
               // interrupts
               _context.add_input(DebuggerInterrupt(message));
+            case Exited | Detached:
+              Log.verbose('Exit message caught: $message');
+              connected = false;
+              this.commands.push(null);
+              responses.push(null);
             case _:
               responses.add(message);
             }
@@ -114,14 +122,18 @@ class DebugConnector {
         } 
         catch(e:haxe.io.Error) {
           switch(e) {
-            case Custom(e) if (Std.is(e, haxe.io.Eof)):
+            case Custom(e) if (Std.is(e, haxe.io.Eof) || e == "EOF"):
+              connected = false;
               this.commands.push(null);
+              responses.push(null);
             case _:
               Log.fatal('Debugger: Error on the debugger input thread: $e');
           }
         }
         catch (e:haxe.io.Eof) {
+          connected = false;
           this.commands.push(null);
+          responses.push(null);
         }
         catch (e:Dynamic) {
           Log.fatal('Debugger: Error on the debugger input thread: $e');
@@ -137,11 +149,16 @@ class DebugConnector {
           while (true) {
             var msg = this.commands.pop(true);
             if (msg == null) {
+              _context.on_debugger_exit();
               break;
             }
             _context.record_io(false, Std.string(msg.cmd));
             HaxeProtocol.writeCommand(out, msg.cmd);
             var resp = responses.pop(true);
+            if (resp == null) {
+              _context.on_debugger_exit();
+              break;
+            }
             if (msg.cb != null) {
               _context.add_worker_fn(function() msg.cb(resp));
             }
@@ -149,18 +166,34 @@ class DebugConnector {
         }
         catch(e:haxe.io.Error) {
           switch(e) {
-            case Custom(e) if (Std.is(e, haxe.io.Eof)):
+            case Custom(e) if (Std.is(e, haxe.io.Eof) || e == "EOF"):
+              connected = false;
             case _:
+              utils.Log.very_verbose('DebugConnector: Exit signal received');
               _context.exit_lock.release();
               Log.fatal('Debugger: Error on the debugger output thread: $e');
           }
         }
         catch (e:haxe.io.Eof) {
+          connected = false;
         }
         catch (e:Dynamic) {
-          _context.exit_lock.release();
+          connected = false;
           Log.fatal('Debugger: Error on the debugger output thread: $e');
         }
+
+        try {
+          Log.verbose('Closing socket');
+          socket.shutdown(true, true);
+          socket.close();
+        } catch(e:Dynamic) {
+        }
+        try {
+          Log.verbose('Closing listen socket');
+          listen_socket.close();
+        } catch(e:Dynamic) {
+        }
+        utils.Log.very_verbose('DebugConnector: Exit signal received');
         _context.exit_lock.release();
       });
 
@@ -177,6 +210,7 @@ class DebugConnector {
         success = true;
       }
       if (!success) {
+        utils.Log.very_verbose('DebugConnector: Exit signal received');
         _context.exit_lock.release();
         Log.fatal('Debugger: The server connected but no identification was found');
       }

@@ -50,6 +50,8 @@ class StdoutProcessor {
           utils.Log.verbose(haxe.CallStack.toString(haxe.CallStack.exceptionStack()));
         }
       }
+      Sys.stdout().flush();
+      utils.Log.very_verbose('StdoutProcessor: Exit signal received');
       _context.exit_lock.release();
     });
   }

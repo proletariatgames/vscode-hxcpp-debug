@@ -27,6 +27,7 @@ class Context {
   var _workers:threads.Workers;
   var _recorder:threads.Recorder;
   var _debug_connector:threads.DebugConnector;
+  var _resetting = false;
 
   // all
   @:allow(threads) var exit_lock:cpp.vm.Lock = new cpp.vm.Lock();
@@ -39,6 +40,24 @@ class Context {
       '/tmp/log'
       //Sys.getEnv('VSCODE_HXCPP_DEBUGGER_DEBUG_OUTPUT')
   };
+
+  public function reset() {
+    Log.verbose('reset call: debug_connector.connected=${_debug_connector.connected}');
+    if (_debug_connector.connected) {
+      _resetting = true;
+      _debug_connector.commands.add({ cmd:Exit, cb:null });
+      exit_lock.wait();
+    } else if (_debug_connector.listen_socket != null) {
+      try {
+        _debug_connector.listen_socket.close();
+      }
+      catch(e:Dynamic) {
+      }
+    }
+    _debug_connector = new threads.DebugConnector(this);
+    this.breakpoints = new Breakpoints(this);
+    this.thread_cache.reset();
+  }
 
   public function new() {
     if (instance != null) {
@@ -61,8 +80,6 @@ class Context {
     _workers = new threads.Workers(this);
     _workers.create_workers(4);
     _debug_connector = new threads.DebugConnector(this);
-
-    exit_lock.release();
   }
 
   public function get_settings() {
@@ -96,24 +113,42 @@ class Context {
       event: Exited,
       body: { exitCode: code }
     } : ExitedEvent) );
+    add_event( ({
+      seq: 0,
+      type: Event,
+      event: Terminated,
+    } : TerminatedEvent) );
     exit(code);
   }
 
   inline static var EXIT_TIMEOUT_SECS = 1.0;
+  static var terminating = false;
 
   public function exit(code:Int) {
+    Log.verbose('exit($code): $terminating');
+    terminating = true;
     _stdout_processor.stdout.add(null);
     var n = 1;
-    if (_recorder != null) {
+    if (_debug_connector.connected) {
+      if (settings.launched) {
+        _debug_connector.commands.push({ cmd:Exit, cb:null });
+      } else {
+        _debug_connector.commands.push({ cmd:Detach, cb:null });
+      }
+
       n++;
+    }
+    for (_ in 0...n) {
+      if (!exit_lock.wait(EXIT_TIMEOUT_SECS)) {
+        trace('Exit timeout reached');
+      }
+    }
+    if (_recorder != null) {
       recorder.add(null);
-    }
-    if (_recorder != null) {
-      _debug_connector.commands.push(null);
-      n++;
-    }
-    if (!exit_lock.wait(EXIT_TIMEOUT_SECS)) {
-      trace('Exit timeout reached');
+      recorder = null;
+      if (!exit_lock.wait(EXIT_TIMEOUT_SECS)) {
+        trace('Exit timeout reached');
+      }
     }
     Sys.exit(code);
   }
@@ -256,10 +291,25 @@ class Context {
     return ret;
   }
 
+  public function on_debugger_exit() {
+    Log.verbose('on_debugger_exit $terminating');
+    if (_resetting) {
+      _resetting = false;
+      return;
+    }
+    if (!terminating) {
+      this.terminate(0);
+    }
+  }
+
   public function add_debugger_commands_async(cmds:Array<Command>, cb:Array<debugger.IController.Message>->Void, ?callOnMainThread=true) {
     if (!callOnMainThread) {
       var oldCb = cb;
       cb = function(msgs) add_main_thread_callback(oldCb.bind(msgs));
+    }
+    if (cmds.length == 0) {
+      cb([]);
+      return;
     }
     var mutex = new cpp.vm.Mutex(), 
         ret = [],
