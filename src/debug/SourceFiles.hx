@@ -41,7 +41,7 @@ class SourceFiles {
 
   public function normalize_full_path(source:String) {
     return try {
-      if (haxe.io.Path.isAbsolute(source)) {
+      if (haxe.io.Path.isAbsolute(source) && sys.FileSystem.exists(source)) {
         haxe.io.Path.normalize(FileSystem.fullPath(source));
       } else {
         haxe.io.Path.normalize(source);
@@ -61,8 +61,8 @@ class SourceFiles {
       }
     }
     // this might be a cppia source, which doesn't contain the full path
-    for (i in 0..._full_sources.length) {
-      if (normalized.endsWith(_full_sources[i].toLowerCase())) {
+    for (i in 0..._original_sources.length) {
+      if (normalized.endsWith(_original_sources[i].toLowerCase()) && normalize_full_path(resolve_source_path(_original_sources[i])).toLowerCase() == normalized) {
         Log.very_verbose('cppia: get_source_path($full_path) = ${_original_sources[i]}');
         return _original_sources[i];
       }

@@ -37,8 +37,8 @@ class Context {
   private var settings:Settings = {
     logLevel: 10, // default
     debugOutput: 
-      '/tmp/log'
-      //Sys.getEnv('VSCODE_HXCPP_DEBUGGER_DEBUG_OUTPUT')
+      // '/tmp/log'
+      Sys.getEnv('VSCODE_HXCPP_DEBUGGER_DEBUG_OUTPUT')
   };
 
   public function reset() {

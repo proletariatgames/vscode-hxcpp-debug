@@ -23,6 +23,7 @@ class Main {
 }
 
 class DebugAdapter {
+  static inline var DEFAULT_TIMEOUT_SECS = 120;
   var _output_thread_started:Bool;
   var _context:debug.Context;
   var _last_reason:StoppedEventReasonEnum = Entry;
@@ -77,6 +78,12 @@ class DebugAdapter {
 
     var port = this.launch_or_attach(_launch_or_attach);
     var settings = _context.get_settings();
+    if (settings.timeout == null) {
+      settings.timeout = DEFAULT_TIMEOUT_SECS;
+    } else if (settings.timeout < 0) {
+      settings.timeout = null;
+    }
+
     var host = 'localhost';
     if (settings.host != null) {
       host = settings.host;
@@ -835,12 +842,16 @@ class DebugAdapter {
       _context.start_recorder_thread();
 
       // compile
-      function change_terminal_args(args:Array<String>) {
-        if (Sys.systemName() == "Windows") {
-          return ["cmd","/C", '"' + args.join('" "') +'" || exit 1'];
-        } else {
-          return args;
+      function change_terminal_args(cwd:String, args:Array<String>) {
+        if (args[0].charCodeAt(0) != '.'.code && 
+            !haxe.io.Path.isAbsolute(args[0]) && 
+            args[0].indexOf('/') < 0 && 
+            args[0].indexOf('\\') < 0 &&
+            sys.FileSystem.exists(cwd + '/' + args[0]))
+        {
+          args[0] = (Sys.systemName() == 'Windows' ? '.\\' : './') + args[0];
         }
+        return args;
       }
       var curSettings:utils.Settings.LaunchSettings = cast settings;
       if (curSettings.compile != null && curSettings.compile.args != null) {
@@ -886,7 +897,7 @@ class DebugAdapter {
         arguments: {
           title: "Hxcpp Debugger Launch",
           cwd: curSettings.run.cwd,
-          args: change_terminal_args(curSettings.run.args),
+          args: change_terminal_args(curSettings.run.cwd, curSettings.run.args),
           env: cast envs
         }
       } : RunInTerminalRequest), function(res) {
@@ -922,9 +933,9 @@ class DebugAdapter {
   }
 
   private function setup_internal_breakpoints() {
-    _context.breakpoints.add_breakpoint(Internal(on_cppia_load), FuncBr('debugger.Debug', 'refreshCppiaDefinitions'));
-    _context.breakpoints.add_breakpoint(Internal(on_new_classpaths), FuncBr('debugger.Debug', 'setClassPaths'));
-    _context.breakpoints.add_breakpoint(Normal, FuncBr('debugger.Debug', 'debugBreak'));
+    _context.breakpoints.add_breakpoint(Internal(on_cppia_load), FuncBr('debugger.Api', 'refreshCppiaDefinitions'));
+    _context.breakpoints.add_breakpoint(Internal(on_new_classpaths), FuncBr('debugger.Api', 'setClassPaths'));
+    _context.breakpoints.add_breakpoint(Normal, FuncBr('debugger.Api', 'debugBreak'));
   }
 
   private function on_new_classpaths() {

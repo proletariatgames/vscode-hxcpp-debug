@@ -41,6 +41,11 @@
         "configurationAttributes": {
           "launch": {
             "properties": {
+              "timeout": {
+                "type": "integer",
+                "description": "The amount of time in seconds that the debugger will wait for the process to start. Default: 120 seconds. Set -1 to disable",
+                "default": 120
+              },
               "stopOnEntry": {
                 "type": "boolean",
                 "description": "Automatically stop after launch.",
@@ -112,6 +117,11 @@
             "required": ["run"]
           },
           "attach": {
+            "timeout": {
+              "type": "integer",
+              "description": "The amount of time in seconds that the debugger will wait for the process to start. Default: 120 seconds. Set -1 to disable",
+              "default": 120
+            },
             "properties": {
               "port": {
                 "type": "integer",
