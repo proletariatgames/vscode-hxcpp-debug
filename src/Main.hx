@@ -782,6 +782,7 @@ class DebugAdapter {
         reason = Breakpoint;
         var bp = _context.breakpoints.get_breakpoint_from_hxcpp(bp_num);
         switch(bp.on_break) {
+        case Normal | Internal(null):
         case Internal(fn):
           fn();
           should_break = false;
@@ -800,7 +801,6 @@ class DebugAdapter {
             msg = 'The breakpoint condition returned an error: $details';
           case _:
           }
-        case Normal:
         }
       case StoppedUncaughtException:
         reason = Exception;
@@ -935,7 +935,7 @@ class DebugAdapter {
   private function setup_internal_breakpoints() {
     _context.breakpoints.add_breakpoint(Internal(on_cppia_load), FuncBr('debugger.Api', 'refreshCppiaDefinitions'));
     _context.breakpoints.add_breakpoint(Internal(on_new_classpaths), FuncBr('debugger.Api', 'setClassPaths'));
-    _context.breakpoints.add_breakpoint(Normal, FuncBr('debugger.Api', 'debugBreak'));
+    _context.breakpoints.add_breakpoint(Internal(null), FuncBr('debugger.Api', 'debugBreak'));
   }
 
   private function on_new_classpaths() {
