@@ -237,9 +237,12 @@ class DebugAdapter {
             Log.verbose('Configuration Done');
             _context.add_response_to(req, true);
             configuration_done = true;
+            // make sure we have the updated classpaths
+            on_new_classpaths(true);
             for (input in after_configuration_done) {
               _context.add_input(input);
             }
+            _context.thread_cache.init();
           case unsupported:
             Log.warn('Debugger: Unsupported command ${req.command}');
           }
@@ -290,7 +293,67 @@ class DebugAdapter {
     }
   }
 
-  private function structured_to_vscode(thread_id:Int, frame_id:Int, s:debugger.IController.StructuredValue, name:String, out:Array<vscode.debugger.Data.Variable>) {
+  private static function val_type_to_class_type(t:debugger.IController.StructuredValueType):Null<String> {
+    return switch(t) {
+      case TypeInstance(name) | TypeClass(name): name;
+      case _: null;
+    }
+  }
+
+  private static function val_list_type_to_class_type(t:debugger.IController.StructuredValueListType):String {
+    return switch(t) {
+      case Instance(cls): cls;
+      case _: null;
+    }
+  }
+
+  private function structured_to_vscode(thread_id:Int, frame_id:Int, 
+                                        s:debugger.IController.StructuredValue, name:String,
+                                        out:Array<vscode.debugger.Data.Variable>, 
+                                        cls_type:Null<debugger.Runtime.ClassDef>,
+                                        expr:Null<String>,
+                                        main_call=true) {
+    var info:Null<debugger.Runtime.VariableProperties> = null,
+        hint:VariablePresentationHint = null,
+        force_elided = false;
+    if (!main_call && cls_type != null) {
+      info = cls_type.vars[name];
+      if (info != null) {
+        hint = {
+          kind: switch(info.kind) {
+              case Var: Property;
+              case Method: Method;
+              case Class: Class;
+              case Data: Data;
+              case Event: Event;
+              case BaseClass: BaseClass;
+              case Interface: Interface;
+              case Virtual: Virtual;
+            },
+          attributes: [],
+          visibility: switch(info.visibility) {
+              case Public: Public;
+              case Private: Private;
+              case Protected: Protected;
+              case Internal: Internal;
+              case Final: Final;
+            }
+        };
+        if (info.attributes.hasAny(Static)) {
+          hint.attributes.push('static');
+        }
+        if (info.attributes.hasAny(Constant)) {
+          hint.attributes.push('constant');
+        }
+        if (info.attributes.hasAny(ReadOnly)) {
+          hint.attributes.push('readOnly');
+        }
+        if (info.attributes.hasAny(Property)) {
+          force_elided = true;
+        }
+      }
+    }
+
     switch(s) {
     case Elided(val_type, get_expression):
       out.push({
@@ -298,30 +361,48 @@ class DebugAdapter {
         value: '',
         type: val_type_to_string(val_type),
         evaluateName: get_expression,
-        variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, get_expression)),
+        variablesReference: 
+          _context.thread_cache.get_or_create_var_ref(
+            StackVar(thread_id, frame_id, get_expression, val_type_to_class_type(val_type))),
+        presentationHint: hint
       });
     case Single(val_type, val):
       out.push({
         name: name,
-        value: val,
-        type: val_type_to_string(val_type),
-        variablesReference: 0,
+        value: force_elided ? '' : val,
+        type: force_elided ? null : val_type_to_string(val_type),
+        presentationHint: hint,
+        variablesReference: !force_elided ? 0 :
+          _context.thread_cache.get_or_create_var_ref(
+            StackVarBuffer(thread_id, frame_id, expr, "get")),
       });
     case List(list_type, lst):
       var lst = lst;
+      var count = 0;
       while (true) {
         switch(lst) {
         case Terminator:
+          if (count == 0 && list_type.match(Instance("cpp::Pointer"))) {
+            out.push({
+              name: name,
+              value: "cpp.Pointer",
+              type: "cpp.Pointer",
+              presentationHint: hint,
+              variablesReference: 0
+            });
+          }
           break;
         case Element(name, val, next):
-          structured_to_vscode(thread_id, frame_id, val, name, out);
+          count++;
+          var expr = list_type == _Array ? (expr + '[' + name + ']') : (expr + '.' + name);
+          structured_to_vscode(thread_id, frame_id, val, name, out, cls_type, expr, false);
           lst = next;
         }
       }
     }
   }
 
-  private static function list_type_to_string(type:debugger.IController.StructuredValueListType) {
+  private static function val_list_type_to_string(type:debugger.IController.StructuredValueListType) {
     return switch(type) {
       case Anonymous: '<anonymous>';
       case Instance(cls): cls;
@@ -355,11 +436,11 @@ class DebugAdapter {
       thread_id = tid;
       frame_id = fid;
       expr = name;
-    case StackVar(tid, fid, e):
+    case StackVar(tid, fid, e, _) | StackVarBuffer(tid, fid, e, _):
       thread_id = tid;
       frame_id = fid;
       expr = e + '.' + name;
-    case StructuredRef(tid, fid, e, s):
+    case StructuredRef(tid, fid, e, _, s):
       thread_id = tid;
       frame_id = fid;
       switch(s) {
@@ -449,7 +530,7 @@ class DebugAdapter {
               resp.body = {
                 result: val_type_to_string(val_type),
                 type: val_type_to_string(val_type),
-                variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, get_expression)),
+                variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, get_expression, val_type_to_class_type(val_type))),
               };
             case Single(val_type, val):
               resp.body = {
@@ -459,9 +540,9 @@ class DebugAdapter {
               };
             case List(list_type, lst):
               resp.body = {
-                result: list_type_to_string(list_type),
-                type: list_type_to_string(list_type),
-                variablesReference: _context.thread_cache.get_or_create_var_ref(StructuredRef(thread_id, frame_id, req.arguments.expression, s)),
+                result: val_list_type_to_string(list_type),
+                type: val_list_type_to_string(list_type),
+                variablesReference: _context.thread_cache.get_or_create_var_ref(StructuredRef(thread_id, frame_id, req.arguments.expression, val_list_type_to_class_type(list_type), s)),
               };
             }
             _context.add_response(req, resp);
@@ -486,16 +567,18 @@ class DebugAdapter {
       return;
     }
     switch(ref) {
-    case StructuredRef(thread_id, frame_id, expr, s):
-      var ret = [];
-      structured_to_vscode(thread_id, frame_id, s, expr, ret);
-      _context.add_response(req, ({
-        seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
-        success: true,
-        body: {
-          variables: ret
-        }
-      } : VariablesResponse));
+    case StructuredRef(thread_id, frame_id, expr, cls_type, s):
+      _context.thread_cache.get_class_def(cls_type, function(def) {
+        var ret = [];
+        structured_to_vscode(thread_id, frame_id, s, expr, ret, def, expr);
+        _context.add_response(req, ({
+          seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+          success: true,
+          body: {
+            variables: ret
+          }
+        } : VariablesResponse));
+      });
     case StackFrame(thread_id, frame_id):
       _context.thread_cache.do_with_frame(thread_id, frame_id, function(msg) {
         if (msg != null) {
@@ -515,26 +598,26 @@ class DebugAdapter {
                     ret.push({
                       name: v,
                       value: '<err>',
-                      variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v)),
+                      variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v, null)),
                       evaluateName: v
                     });
                   case Structured(s):
                     switch(s) {
-                    case List(_):
+                    case List(t,_):
                       ret.push({
                         name: v,
-                        value: '',
-                        variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v)),
+                        value: val_list_type_to_string(t),
+                        variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v, val_list_type_to_class_type(t))),
                         evaluateName: v
                       });
                     case _:
-                      structured_to_vscode(thread_id, frame_id, s, v, ret);
+                      structured_to_vscode(thread_id, frame_id, s, v, ret, null, v);
                     }
                   case _:
                     ret.push({
                       name: v,
                       value: '<err>',
-                      variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v)),
+                      variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, v, null)),
                       evaluateName: v
                     });
                 }
@@ -554,7 +637,59 @@ class DebugAdapter {
             _context.add_response_to(req, false, 'Unexpected error while getting variables for $frame_id:$thread_id: $msg');
         }
       });
-    case StackVar(thread_id, frame_id, expr):
+    case StackVarBuffer(thread_id, frame_id, expr, name):
+      _context.thread_cache.do_with_frame(thread_id, frame_id, function(msg) {
+        if (msg != null) {
+          _context.add_response_to(req, false, 'Error while getting frame $frame_id for $thread_id: $msg');
+          return;
+        }
+        // call this synchronously otherwise something else might make this leave the current frame
+        switch (_context.add_debugger_command_sync(GetStructured(false, expr))) {
+        case Structured(structured):
+          var cls_type = null,
+              type = null;
+          switch(structured) {
+            case Elided(val_type,_) | Single(val_type, _): 
+              type = val_type_to_string(val_type);
+              cls_type = val_type_to_class_type(val_type);
+            case List(list_type,_): 
+              type = val_list_type_to_string(list_type);
+              cls_type = val_list_type_to_class_type(list_type);
+          }
+          _context.add_response(req, ({
+              seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+              success: true,
+              body: {
+                variables: [{
+                  name: name,
+                  value: type,
+                  type: type,
+                  presentationHint: {
+                    kind: Property,
+                    attributes: [],
+                    visibility: Public
+                  },
+                  evaluateName: expr,
+                  variablesReference: 
+                    _context.thread_cache.get_or_create_var_ref(
+                      StructuredRef(thread_id, frame_id, expr, cls_type, structured))
+                }]
+              }
+          } : VariablesResponse));
+
+        case ErrorCurrentThreadNotStopped(_):
+          _context.add_response_to(req, false, 'Error while getting variable for $frame_id:$thread_id@$expr: Thread not stopped');
+          return;
+        case ErrorEvaluatingExpression(details):
+          _context.add_response_to(req, false, 'Error while getting variable for $frame_id:$thread_id@$expr: Error evaluating expression: $details');
+          return;
+        case _:
+          _context.add_response_to(req, false, 'Unexpected error while getting variable for $frame_id:$thread_id@$expr');
+          return;
+        }
+      });
+
+    case StackVar(thread_id, frame_id, expr, cls_type):
       _context.thread_cache.do_with_frame(thread_id, frame_id, function(msg) {
         if (msg != null) {
           _context.add_response_to(req, false, 'Error while getting frame $frame_id for $thread_id: $msg');
@@ -564,16 +699,18 @@ class DebugAdapter {
         switch (_context.add_debugger_command_sync(GetStructured(false, expr))) {
         case Structured(structured):
           _context.thread_cache.set_stack_var_result(req.arguments.variablesReference, structured);
+          _context.thread_cache.get_class_def(cls_type, function(def) {
+            var ret = [];
+            structured_to_vscode(thread_id, frame_id, structured, expr, ret, def, expr);
+            _context.add_response(req, ({
+              seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
+              success: true,
+              body: {
+                variables: ret
+              }
+            } : VariablesResponse));
+          });
 
-          var ret = [];
-          structured_to_vscode(thread_id, frame_id, structured, expr, ret);
-          _context.add_response(req, ({
-            seq: 0, type: Response, request_seq: req.seq, command: Std.string(req.command),
-            success: true,
-            body: {
-              variables: ret
-            }
-          } : VariablesResponse));
         case ErrorCurrentThreadNotStopped(_):
           _context.add_response_to(req, false, 'Error while getting variable for $frame_id:$thread_id@$expr: Thread not stopped');
           return;
@@ -621,7 +758,7 @@ class DebugAdapter {
                   });
                   ret.push({
                     name: 'Statics',
-                    variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, class_name)),
+                    variablesReference: _context.thread_cache.get_or_create_var_ref(StackVar(thread_id, frame_id, class_name, class_name)),
                     expensive: false,
                     source: {
                       name: file_name,
@@ -922,7 +1059,7 @@ class DebugAdapter {
       _context.start_recorder_thread();
 
       var curSettings:utils.Settings.AttachSettings = cast settings;
-      port = curSettings.port;
+      port = curSettings.port == null ? 6972 : curSettings.port;
       if (port <= 0) {
         Log.fatal('Attach: Invalid port $port');
       }
@@ -934,14 +1071,15 @@ class DebugAdapter {
 
   private function setup_internal_breakpoints() {
     _context.breakpoints.add_breakpoint(Internal(on_cppia_load), FuncBr('debugger.Api', 'refreshCppiaDefinitions'));
-    _context.breakpoints.add_breakpoint(Internal(on_new_classpaths), FuncBr('debugger.Api', 'setClassPaths'));
+    _context.breakpoints.add_breakpoint(Internal(on_new_classpaths.bind(false)), FuncBr('debugger.Api', 'setClassPaths'));
     _context.breakpoints.add_breakpoint(Internal(null), FuncBr('debugger.Api', 'debugBreak'));
   }
 
-  private function on_new_classpaths() {
+  private function on_new_classpaths(initial) {
     Log.verbose('Receiving new classpaths');
+    var get_classpaths = initial ? 'debugger.Api.lastClasspaths' : 'classpaths';
 
-    switch(_context.add_debugger_command_sync(GetStructured(false, 'classpaths'))) {
+    switch(_context.add_debugger_command_sync(GetStructured(false, get_classpaths))) {
     case Structured(List(_Array, lst)):
       var arr = [];
       var lst = lst;
@@ -958,8 +1096,14 @@ class DebugAdapter {
       _context.source_files.add_classpaths(arr);
       Log.log('Classpath information updated');
       Log.verbose('Added classpaths: $arr');
+    case Structured(Single(_, "null")) if (initial):
+      // it's still null - no worries
     case unexpected:
       Log.error('Unexpected response when getting new classpaths: $unexpected');
+    }
+
+    if (initial) {
+      return;
     }
 
     switch (_context.add_debugger_command_sync(Continue(1))) {
@@ -980,6 +1124,7 @@ class DebugAdapter {
     this._context.query_source_files();
     // refresh breakpoints that were not found
     Log.verbose('Refreshing breakpoints');
+    this._context.thread_cache.reset_class_defs();
     this._context.breakpoints.refresh_breakpoints();
     // continue
     switch (_context.add_debugger_command_sync(Continue(1))) {

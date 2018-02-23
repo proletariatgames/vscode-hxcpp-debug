@@ -25,5 +25,5 @@ typedef LaunchSettings = {
 
 typedef AttachSettings = {
     > Settings,
-    port:Int,
+    ?port:Int,
 }

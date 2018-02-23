@@ -3,8 +3,9 @@ import utils.Log;
 
 enum VarRef {
   StackFrame(thread_id:Int, frame_id:Int);
-  StackVar(thread_id:Int, frame_id:Int, expr:String);
-  StructuredRef(thread_id:Int, frame_id:Int, expr:String, structured:debugger.IController.StructuredValue);
+  StackVar(thread_id:Int, frame_id:Int, expr:String, cls_type:Null<String>);
+  StackVarBuffer(thread_id:Int, frame_id:Int, expr:String, name:String);
+  StructuredRef(thread_id:Int, frame_id:Int, expr:String, cls_type:Null<String>, structured:debugger.IController.StructuredValue);
 }
 
 class ThreadCache {
@@ -18,12 +19,100 @@ class ThreadCache {
   var _var_ref_map:Map<VarRef, Int>;
   var _var_ref_len = 0;
 
+  var _class_defs:Map<String, Null<debugger.Runtime.ClassDef>>;
+  var _class_defs_supported:Null<Bool>;
+
   public function new(context) {
     _cached = Terminator;
     _var_refs = [];
     _var_ref_last_value = new Map();
     _var_ref_map = new Map();
     _context = context;
+    reset_class_defs();
+  }
+
+  public function reset_class_defs() {
+    _class_defs = [ "cpp::Pointer" => null ];
+  }
+
+  public function init() {
+    _context.add_debugger_command(GetStructured(true, 'debugger.Runtime.getDataFor'), function(msg) {
+      switch(msg) {
+      case Structured(_):
+        _class_defs_supported = true;
+      case _:
+        Log.very_verbose('Class defs are not supported: $msg');
+        _class_defs_supported = false;
+      }
+    });
+  }
+
+  public function get_class_def_sync(name:String):Null<debugger.Runtime.ClassDef> {
+    if (name == null || _class_defs_supported != null && !_class_defs_supported) {
+      return null;
+    }
+    if (_class_defs.exists(name)) {
+      return _class_defs[name];
+    }
+    switch(_context.add_debugger_command_sync(GetStructured(true, 'debugger.Runtime.getDataFor("$name").vars'))) {
+    case Structured(List(_, lst)):
+      var ret:haxe.DynamicAccess<debugger.Runtime.VariableProperties> = {};
+      var lst = lst;
+      while (true) {
+        switch(lst) {
+        case Terminator:
+          break;
+        case Element(name, Single(_, value), next):
+          ret[name] = cast Std.parseInt(value);
+          lst = next;
+        case Element(n, v, next):
+          Log.warn('Error while getting runtime data info for $name. Expected Single, got $v for field $n');
+          lst = next;
+        }
+      }
+      _class_defs_supported = true;
+      return _class_defs[name] = { vars: ret };
+    case err:
+      Log.very_verbose('Cannot find data for $name: $err');
+      return _class_defs[name] = null;
+    }
+  }
+
+  public function get_class_def(name:String, cb:Null<debugger.Runtime.ClassDef>->Void) {
+    if (name == null || _class_defs_supported != null && !_class_defs_supported) {
+      cb(null);
+      return;
+    }
+    if (_class_defs.exists(name)) {
+      cb(_class_defs[name]);
+      return;
+    }
+    _context.add_debugger_command(GetStructured(true, 'debugger.Runtime.getDataFor("$name").vars'), function(ret) {
+      switch(ret) {
+      case Structured(List(_, lst)):
+        var ret:haxe.DynamicAccess<debugger.Runtime.VariableProperties> = {};
+        var lst = lst;
+        while (true) {
+          switch(lst) {
+          case Terminator:
+            break;
+          case Element(name, Single(_, value), next):
+            ret[name] = cast Std.parseInt(value);
+            lst = next;
+          case Element(n, v, next):
+            Log.warn('Error while getting runtime data info for $name. Expected Single, got $v for field $n');
+            lst = next;
+          }
+        }
+        _class_defs_supported = true;
+        cb(_class_defs[name] = { vars: ret });
+        return;
+      case err:
+        Log.very_verbose('Cannot find data for $name: $err');
+        cb(_class_defs[name] = null);
+        return;
+      }
+    });
   }
 
   public function set_stack_var_result(id:Int, s:debugger.IController.StructuredValue) {
@@ -33,8 +122,8 @@ class ThreadCache {
       return;
     }
     switch(ret) {
-      case StackVar(thread_id, frame_id, expr):
-        _var_ref_last_value[id] = StructuredRef(thread_id, frame_id, expr, s);
+      case StackVar(thread_id, frame_id, expr, t):
+        _var_ref_last_value[id] = StructuredRef(thread_id, frame_id, expr, t, s);
       case StructuredRef(_): // no problem
       case _:
         Log.error('Expected StackVar, got $ret for id $id');
@@ -43,7 +132,7 @@ class ThreadCache {
 
   public function get_or_create_var_ref(vr:VarRef):Int {
     switch(vr) {
-    case StackVar(_, _, expr) if (expr.indexOf('.') >= 0 || expr.indexOf('(') >= 0 || expr.indexOf('[') >= 0): // don't even bother checking
+    case StackVar(_, _, expr, _) if (expr.indexOf('.') >= 0 || expr.indexOf('(') >= 0 || expr.indexOf('[') >= 0): // don't even bother checking
       var newRef = _var_refs.push(vr);
       return newRef;
     case StructuredRef(_):
