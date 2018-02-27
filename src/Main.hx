@@ -17,7 +17,7 @@ class Main {
         last.loop();
       }
     } catch(e:Dynamic) {
-      Log.fatal('Debugger: Error on main thread: $e');
+      Log.fatal('Debugger: Error on main thread: $e\n${haxe.CallStack.toString(haxe.CallStack.exceptionStack())}');
     }
   }
 }
@@ -162,17 +162,23 @@ class DebugAdapter {
           } else {
             // get thread stopped reason
             if (_last_reason != null) {
-              _context.add_event(( {
-                seq: 0,
-                type: Event,
-                event: Stopped,
-                body: {
-                  reason: _last_reason,
-                  threadId: thread_number,
-                  allThreadsStopped: true
-                }
-              } : StoppedEvent));
-              _last_reason = null;
+              if (_last_reason == Entry && !_context.get_settings().stopOnEntry) {
+                Log.verbose('Thread stopped but stopOnEntry is false. Continuing');
+                _last_reason = null;
+                _context.add_debugger_command(Continue(1));
+              } else {
+                _context.add_event(( {
+                  seq: 0,
+                  type: Event,
+                  event: Stopped,
+                  body: {
+                    reason: _last_reason,
+                    threadId: thread_number,
+                    allThreadsStopped: true
+                  }
+                } : StoppedEvent));
+                _last_reason = null;
+              }
             } else {
               emit_thread_stopped(thread_number, stack_frame, cls_name, fn_name, file_name, ln_num);
             }

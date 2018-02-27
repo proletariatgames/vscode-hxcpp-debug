@@ -277,7 +277,7 @@ class Context {
   }
 
   public function add_debugger_command(cmd:Command, ?cb:debugger.IController.Message->Void, ?callOnMainThread:Bool=true) {
-    _debug_connector.commands.add({ cmd:cmd, cb:callOnMainThread ? function(msg) add_main_thread_callback(cb.bind(msg)) : cb });
+    _debug_connector.commands.add({ cmd:cmd, cb:callOnMainThread && cb != null ? function(msg) add_main_thread_callback(cb.bind(msg)) : cb });
   }
 
   public function add_debugger_command_sync(cmd:Command, ?timeout:Float):debugger.IController.Message {
