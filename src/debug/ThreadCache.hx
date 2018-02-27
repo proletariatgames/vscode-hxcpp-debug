@@ -14,9 +14,8 @@ class ThreadCache {
   var _current_thread:Int;
   var _current_frame:Int;
   var _cached:debugger.IController.ThreadWhereList;
-  var _var_refs:Array<VarRef>;
+  var _var_refs:Map<Int, VarRef>;
   var _var_ref_last_value:Map<Int, VarRef>;
-  var _var_ref_map:Map<VarRef, Int>;
   var _var_ref_len = 0;
 
   var _class_defs:Map<String, Null<debugger.Runtime.ClassDef>>;
@@ -24,9 +23,8 @@ class ThreadCache {
 
   public function new(context) {
     _cached = Terminator;
-    _var_refs = [];
+    _var_refs = new Map();
     _var_ref_last_value = new Map();
-    _var_ref_map = new Map();
     _context = context;
     reset_class_defs();
   }
@@ -131,27 +129,16 @@ class ThreadCache {
   }
 
   public function get_or_create_var_ref(vr:VarRef):Int {
-    switch(vr) {
-    case StackVar(_, _, expr, _) if (expr.indexOf('.') >= 0 || expr.indexOf('(') >= 0 || expr.indexOf('[') >= 0): // don't even bother checking
-      var newRef = _var_refs.push(vr);
-      return newRef;
-    case StructuredRef(_):
-      var newRef = _var_refs.push(vr);
-      return newRef;
-    case _:
-
-    }
-    var existing = _var_ref_map[vr];
-    if (existing != null) {
-      return existing;
-    }
-    var newRef = _var_refs.push(vr);
-    _var_ref_map[vr] = newRef;
-    return newRef;
+    _var_ref_len++;
+    _var_refs[_var_ref_len] = vr;
+    return _var_ref_len;
   }
 
   public function reset() {
+    Log.very_verbose('Resetting thread cache');
     _cached = Terminator;
+    _var_refs = new Map();
+    _var_ref_last_value = new Map();
   }
 
   public function get_last_value_ref(ref_id:Int) {
@@ -159,11 +146,11 @@ class ThreadCache {
     if (ret != null) {
       return ret;
     }
-    return _var_refs[ref_id-1];
+    return _var_refs[ref_id];
   }
 
   public function get_ref(ref_id:Int) {
-    return _var_refs[ref_id-1];
+    return _var_refs[ref_id];
   }
 
   public function do_with_frame(thread_id:Int, frame_id:Int, cb:Null<debugger.IController.Message>->Void) {

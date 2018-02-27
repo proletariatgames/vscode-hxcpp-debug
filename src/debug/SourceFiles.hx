@@ -73,6 +73,14 @@ class SourceFiles {
     return normalized;
   }
 
+  public function resolve_source_path_for_vscode(name:String) {
+    var ret = resolve_source_path(name);
+    if (Sys.systemName() == "Windows") {
+      ret = ret.replace('/','\\');
+    }
+    return ret;
+  }
+
   public function resolve_source_path(name:String) {
     if (name.trim() == '?') {
       return name;

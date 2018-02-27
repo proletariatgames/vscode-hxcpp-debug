@@ -275,6 +275,8 @@ class Breakpoints {
       wait_all_added();
     }
 
+    var added_bps = [];
+
     for (bp in _breakpoints) {
       var resend = false;
       switch(bp.status) {
@@ -291,7 +293,26 @@ class Breakpoints {
       case Disabled:
       }
       if (resend) {
+        added_bps.push(bp);
         cmd_add_breakpoint(bp);
+      }
+    }
+
+    if (added_bps.length != 0) {
+      wait_all_added();
+
+      for (bp in added_bps) {
+        if (bp.hxcpp_id != null) {
+          _context.add_event(({
+            seq: 0, type: Event, event: Breakpoint,
+            body: {
+              reason: New,
+              breakpoint: {
+                id: bp.internal_id, verified: true
+              }
+            }
+          } : BreakpointEvent));
+        }
       }
     }
   }
