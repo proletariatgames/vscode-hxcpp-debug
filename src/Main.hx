@@ -401,6 +401,10 @@ class DebugAdapter {
             });
           }
           break;
+        case Element('static variables', _, next):
+          // static variables right now is a mess and contains
+          // all static functions/variables from all hierarchy
+          lst = next;
         case Element(name, val, next):
           count++;
           var expr = list_type == _Array ? (expr + '[' + name + ']') : (expr + '.' + name);
