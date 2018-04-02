@@ -54,6 +54,12 @@ class SourceFiles {
 
   public function get_source_path(full_path:String) {
     var normalized = normalize_full_path(full_path).toLowerCase();
+    for (i in 0..._sources.length) {
+      if (_sources[i].toLowerCase() == normalized) {
+        Log.very_verbose('get_source_path($full_path) = ${_original_sources[i]}');
+        return _original_sources[i];
+      }
+    }
     for (i in 0..._full_sources.length) {
       if (_full_sources[i].toLowerCase() == normalized) {
         Log.very_verbose('get_source_path($full_path) = ${_original_sources[i]}');
