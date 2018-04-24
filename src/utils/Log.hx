@@ -1,6 +1,13 @@
 package utils;
+#if !macro
 import vscode.debugger.Data;
 import haxe.PosInfos;
+#else
+import haxe.macro.Expr;
+import haxe.macro.Context;
+
+using haxe.macro.Tools;
+#end
 
 @:enum abstract LogLevel(Int) {
   var VeryVerbose = 100;
@@ -16,6 +23,59 @@ import haxe.PosInfos;
 }
 
 class Log {
+#if macro
+  static function log_with_level(level:Expr, msg:Expr, ?pos:Expr) {
+    var call = macro @:pos(msg.pos) utils.Log.Log_Helper.log_with_level($level, $msg);
+    if (pos == null || pos.expr.match(EConst(CIdent("null")))) {
+      call = macro utils.Log.Log_Helper.log_with_level($level, $msg, $pos);
+    }
+    return macro @:pos(msg.pos) if ($level == utils.Log.LogLevel.Fatal || debug.Context.instance.has_recorder() || debug.Context.instance.get_settings().logLevel >= $level.int()) {
+      $call;
+    } else {
+      null;
+    }
+  }
+#else
+  inline public static function fatal(msg:String, ?pos:haxe.PosInfos):Dynamic {
+    return utils.Log.Log_Helper.fatal(msg, pos);
+  }
+
+#end
+
+  macro public static function log(msg:Expr, ?pos:Expr) {
+    return log_with_level(macro utils.Log.LogLevel.OnlyLog, msg, pos);
+  }
+
+  macro public static function verbose(msg:Expr, ?pos:Expr) {
+    return log_with_level(macro utils.Log.LogLevel.Verbose, msg, pos);
+  }
+
+  macro public static function very_verbose(msg:Expr, ?pos:Expr) {
+    return log_with_level(macro utils.Log.LogLevel.VeryVerbose, msg, pos);
+  }
+
+  macro public static function warn(msg:Expr, ?pos:Expr) {
+    return log_with_level(macro utils.Log.LogLevel.Warning, msg, pos);
+  }
+
+  macro public static function error(msg:Expr, ?pos:Expr) {
+    return log_with_level(macro utils.Log.LogLevel.Error, msg, pos);
+  }
+
+  macro public static function assert(cond:ExprOf<Bool>, ?msg:ExprOf<String>, ?pos:Expr) {
+    var epos = Context.currentPos();
+    var call = macro @:pos(epos) utils.Log.Log_Helper.log_with_level(Fatal, ("assertion failed: " + $v{cond.toString()} + $msg), $pos);
+    if (pos == null || pos.expr.match(EConst(CIdent("null")))) {
+      call = macro @:pos(epos) utils.Log.Log_Helper.log_with_level(Fatal, ("assertion failed: " + $v{cond.toString()} + $msg));
+    }
+    return macro @:pos(epos) if (!($cond)) {
+      $call;
+    }
+  }
+}
+
+#if !macro
+class Log_Helper {
   public static function log_with_level(level:LogLevel, msg:String, ?pos:PosInfos) {
     var loggedMsg = msg;
     if (pos != null) {
@@ -72,3 +132,4 @@ class Log {
     }
   }
 }
+#end

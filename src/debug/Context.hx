@@ -36,7 +36,7 @@ class Context {
 
   private var settings:Settings = {
     logLevel: 10, // default
-    debugOutput: 
+    debugOutput:
       // '/tmp/log'
       Sys.getEnv('VSCODE_HXCPP_DEBUGGER_DEBUG_OUTPUT')
   };
@@ -102,7 +102,6 @@ class Context {
         Log.fatal('Debugger: Unexpected connector response to Files request: $unexpected');
     };
 
-    this.source_files = new SourceFiles(this,this.source_files.classpaths);
     this.source_files.update_sources(files, fullPath);
   }
 
@@ -246,6 +245,10 @@ class Context {
     }
   }
 
+  inline public function has_recorder() {
+    return _recorder != null;
+  }
+
   public function record_log(level:utils.Log.LogLevel, msg:String, pos:haxe.PosInfos) {
     if (_recorder != null) {
       recorder.add({ date:Date.now(), io:false, log:level, msg:msg, pos:pos });
@@ -311,7 +314,7 @@ class Context {
       cb([]);
       return;
     }
-    var mutex = new cpp.vm.Mutex(), 
+    var mutex = new cpp.vm.Mutex(),
         ret = [],
         count = 0,
         len = cmds.length;
