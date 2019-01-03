@@ -214,6 +214,8 @@ class DebugAdapter {
             _context.breakpoints.vscode_set_breakpoints(cast req);
           case SetFunctionBreakpoints:
             _context.breakpoints.vscode_set_fn_breakpoints(cast req);
+          case SetExceptionBreakpoints:
+            _context.add_response_to(req, true);
           case Continue:
             _last_reason = null;
             call_and_respond(req, Continue(1));
@@ -316,9 +318,9 @@ class DebugAdapter {
     }
   }
 
-  private function structured_to_vscode(thread_id:Int, frame_id:Int, 
+  private function structured_to_vscode(thread_id:Int, frame_id:Int,
                                         s:debugger.IController.StructuredValue, name:String,
-                                        out:Array<vscode.debugger.Data.Variable>, 
+                                        out:Array<vscode.debugger.Data.Variable>,
                                         cls_type:Null<debugger.Runtime.ClassDef>,
                                         expr:Null<String>,
                                         main_call=true) {
@@ -370,7 +372,7 @@ class DebugAdapter {
         value: '',
         type: val_type_to_string(val_type),
         evaluateName: get_expression,
-        variablesReference: 
+        variablesReference:
           _context.thread_cache.get_or_create_var_ref(
             StackVar(thread_id, frame_id, get_expression, val_type_to_class_type(val_type))),
         presentationHint: hint
@@ -662,10 +664,10 @@ class DebugAdapter {
           var cls_type = null,
               type = null;
           switch(structured) {
-            case Elided(val_type,_) | Single(val_type, _): 
+            case Elided(val_type,_) | Single(val_type, _):
               type = val_type_to_string(val_type);
               cls_type = val_type_to_class_type(val_type);
-            case List(list_type,_): 
+            case List(list_type,_):
               type = val_list_type_to_string(list_type);
               cls_type = val_list_type_to_class_type(list_type);
           }
@@ -683,7 +685,7 @@ class DebugAdapter {
                     visibility: Public
                   },
                   evaluateName: expr,
-                  variablesReference: 
+                  variablesReference:
                     _context.thread_cache.get_or_create_var_ref(
                       StructuredRef(thread_id, frame_id, expr, cls_type, structured))
                 }]
@@ -993,9 +995,9 @@ class DebugAdapter {
 
       // compile
       function change_terminal_args(cwd:String, args:Array<String>) {
-        if (args[0].charCodeAt(0) != '.'.code && 
-            !haxe.io.Path.isAbsolute(args[0]) && 
-            args[0].indexOf('/') < 0 && 
+        if (args[0].charCodeAt(0) != '.'.code &&
+            !haxe.io.Path.isAbsolute(args[0]) &&
+            args[0].indexOf('/') < 0 &&
             args[0].indexOf('\\') < 0 &&
             sys.FileSystem.exists(cwd + '/' + args[0]))
         {
@@ -1153,7 +1155,7 @@ class DebugAdapter {
 
   private static function find_random_port(host:String) {
     while (true) {
-      var port = Std.random(60000) + 1024; 
+      var port = Std.random(60000) + 1024;
       try {
         var sock = new sys.net.Socket();
         sock.bind(new sys.net.Host(host), port);

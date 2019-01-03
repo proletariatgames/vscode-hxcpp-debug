@@ -188,7 +188,7 @@ class SourceFiles {
     if (Sys.systemName() == "Windows") {
       ret = ret.replace('/','\\');
     }
-    return ret;
+    return 'file:///' + ret;
   }
 
   private function warn_once(name:String, msg:String, ?pos:haxe.PosInfos) {
