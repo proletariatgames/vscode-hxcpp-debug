@@ -1,8 +1,4 @@
 package debug;
-import cpp.vm.Thread;
-import cpp.vm.Deque;
-import cpp.vm.Mutex;
-
 import debugger.IController;
 
 import utils.Log;
@@ -12,10 +8,22 @@ import vscode.debugger.Data;
 using Lambda;
 using StringTools;
 
+#if haxe4
+import sys.thread.Deque;
+import sys.thread.Mutex;
+import sys.thread.Thread;
+private typedef SysThread = sys.thread.Thread;
+#else
+import cpp.vm.Deque;
+import cpp.vm.Mutex;
+import cpp.vm.Thread;
+private typedef SysThread = cpp.vm.Thread;
+#end
+
 enum BreakpointOnBreak {
   Internal(fn:Void->Void);
   Normal;
-  Conditional(exprCondition:String); 
+  Conditional(exprCondition:String);
 }
 
 enum BreakpointKind {
@@ -48,18 +56,18 @@ class Breakpoints {
   var _breakpoints:Map<Int, Breakpoint>;
   var _breakpoints_by_kind:Map<String, Breakpoint>;
   var _hxcpp_to_internal:Map<Int, Int> = new Map();
-  var _bp_mutex:cpp.vm.Mutex;
+  var _bp_mutex:Mutex;
 
-  var _ready:cpp.vm.Deque<{ internal_id: Int, response:debugger.IController.Message }>;
+  var _ready:Deque<{ internal_id: Int, response:debugger.IController.Message }>;
   var _wait_amount:Int = 0;
 
   public function new(ctx:Context) {
     _context = ctx;
 
-    _ready = new cpp.vm.Deque();
+    _ready = new Deque();
     _breakpoints = new Map();
     _breakpoints_by_kind = new Map();
-    _bp_mutex = new cpp.vm.Mutex();
+    _bp_mutex = new Mutex();
   }
 
   public function get_breakpoint_from_hxcpp(hxcpp_id:Int):Breakpoint {
@@ -83,7 +91,11 @@ class Breakpoints {
   }
 
   public function add_breakpoint(on_break:BreakpointOnBreak, kind:BreakpointKind) {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Breakpoint added on a helper thread");
+    #if haxe4
+    Log.assert(SysThread.current() == _context.main_thread, "Breakpoint added on a helper thread");
+    #else
+    Log.assert(SysThread.current().handle == _context.main_thread.handle, "Breakpoint added on a helper thread");
+    #end
     var desc = Std.string(kind);
     var breakpoint = _breakpoints_by_kind[desc];
     if (breakpoint == null) {
@@ -105,7 +117,11 @@ class Breakpoints {
   }
 
   private function delete_breakpoint(internal_id:Int) {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Calling thread is not main thread");
+    #if haxe4
+    Log.assert(SysThread.current() == _context.main_thread, "Calling thread is not main thread");
+    #else
+    Log.assert(SysThread.current().handle == _context.main_thread.handle, "Calling thread is not main thread");
+    #end
     Log.very_verbose('delete_breakpoint($internal_id)');
     var bp = this._breakpoints[internal_id];
     if (bp == null) {
@@ -130,7 +146,11 @@ class Breakpoints {
   }
 
   public function vscode_set_breakpoints(request:SetBreakpointsRequest):Void {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Setting breakpoints on a different thread");
+    #if haxe4
+    Log.assert(SysThread.current() == _context.main_thread, "Setting breakpoints on a different thread");
+    #else
+    Log.assert(SysThread.current().handle == _context.main_thread.handle, "Setting breakpoints on a different thread");
+    #end
     wait_all_added();
     // first of all, delete all unreferenced breakpoints
     var full_path = _context.source_files.normalize_full_path(request.arguments.source.path),
@@ -155,7 +175,7 @@ class Breakpoints {
       var on_break = line.condition != null && line.condition.trim().length != 0 ? Conditional(line.condition) : Normal;
       ids.push(this.add_breakpoint(on_break, LineBr(full_path, line.line)));
     }
-    
+
     var bps = [];
     var ret:SetBreakpointsResponse = { type: Response, seq:0, request_seq: request.seq, success:true, command: Std.string(request.command), body: { breakpoints: bps } };
     if (ids.length > 0) {
@@ -186,7 +206,11 @@ class Breakpoints {
   }
 
   public function vscode_set_fn_breakpoints(request:SetFunctionBreakpointsRequest):Void {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Setting breakpoints on a different thread");
+    #if haxe4
+    Log.assert(SysThread.current() == _context.main_thread, "Setting breakpoints on a different thread");
+    #else
+    Log.assert(SysThread.current().handle == _context.main_thread.handle, "Setting breakpoints on a different thread");
+    #end
     wait_all_added();
     // first of all, delete all unreferenced breakpoints
     var to_delete = [];
@@ -220,7 +244,7 @@ class Breakpoints {
           cls = split.join(chr);
       ids.push(this.add_breakpoint(on_break, FuncBr(cls, fn)));
     }
-    
+
     var bps = [];
     var ret:SetFunctionBreakpointsResponse = { type: Response, seq:0, request_seq: request.seq, success:true, command: Std.string(request.command), body: { breakpoints: bps } };
     if (ids.length > 0) {
@@ -270,7 +294,11 @@ class Breakpoints {
   }
 
   public function refresh_breakpoints() {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "Breakpoint added on a helper thread");
+    #if haxe4
+    Log.assert(SysThread.current() == _context.main_thread, "Breakpoint added on a helper thread");
+    #else
+    Log.assert(SysThread.current().handle == _context.main_thread.handle, "Breakpoint added on a helper thread");
+    #end
     if (_wait_amount != 0) {
       wait_all_added();
     }
@@ -318,7 +346,11 @@ class Breakpoints {
   }
 
   public function wait_all_added() {
-    Log.assert(cpp.vm.Thread.current().handle == _context.main_thread.handle, "wait_all_added called on a helper thread");
+    #if haxe4
+    Log.assert(SysThread.current() == _context.main_thread, "wait_all_added called on a helper thread");
+    #else
+    Log.assert(SysThread.current().handle == _context.main_thread.handle, "wait_all_added called on a helper thread");
+    #end
     for (i in 0..._wait_amount) {
       var id = _ready.pop(true);
       if (id != null) {

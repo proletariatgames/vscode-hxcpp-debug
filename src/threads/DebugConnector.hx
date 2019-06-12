@@ -1,5 +1,14 @@
 package threads;
+#if haxe4
+import sys.thread.Deque;
+import sys.thread.Lock;
+import sys.thread.Thread;
+#else
 import cpp.vm.Deque;
+import cpp.vm.Lock;
+import cpp.vm.Thread;
+#end
+
 import debugger.HaxeProtocol;
 import debugger.IController;
 import utils.Log;
@@ -8,8 +17,8 @@ class DebugConnector {
   public var commands(default, null):Deque<{ cmd:Command, cb:debugger.IController.Message->Void }> = new Deque();
   public var connected(default, null):Bool;
   public var socket_connecting(default, null):Bool = false;
-  var input_thread:cpp.vm.Thread;
-  var output_thread:cpp.vm.Thread;
+  var input_thread:Thread;
+  var output_thread:Thread;
   public var listen_socket(default, null):sys.net.Socket;
 
   var _context:debug.Context;
@@ -27,8 +36,8 @@ class DebugConnector {
     this.socket_connecting = true;
 
     var time = Sys.time();
-    var waitLock = new cpp.vm.Lock();
-    cpp.vm.Thread.create(function() {
+    var waitLock = new Lock();
+    Thread.create(function() {
       pvt_connect_and_create_threads(host, port, timeoutSeconds);
       waitLock.release();
     });
@@ -49,7 +58,7 @@ class DebugConnector {
         return (timeoutSeconds != null && Sys.time() >= startTime + timeoutSeconds);
       }
       listen_socket =  null;
-      
+
       do {
         try {
           listen_socket = new sys.net.Socket();
@@ -84,18 +93,18 @@ class DebugConnector {
           Log.log('Debugger: Trying again in 1 second');
           Sys.sleep(1);
         }
-      } 
+      }
       while (socket == null && !timeout_reached());
 
       var peer = socket.peer();
       connected = true;
       Log.log("VSCHS: Received connection from " + peer.host + ".");
 
-      var initLockInput = new cpp.vm.Lock(),
-        initLockOutput = new cpp.vm.Lock();
-      var responses = new cpp.vm.Deque<Message>();
+      var initLockInput = new Lock(),
+        initLockOutput = new Lock();
+      var responses = new Deque<Message>();
 
-      this.input_thread = cpp.vm.Thread.create(function() {
+      this.input_thread = Thread.create(function() {
         try {
           var inp = socket.input;
           HaxeProtocol.readClientIdentification(inp);
@@ -106,7 +115,7 @@ class DebugConnector {
             var message = HaxeProtocol.readMessage(inp);
             _context.record_io(true, Std.string(message));
             switch(message) {
-            case ThreadCreated(_) | ThreadTerminated(_) | 
+            case ThreadCreated(_) | ThreadTerminated(_) |
                ThreadStarted(_) | ThreadStopped(_):
               // interrupts
               _context.add_input(DebuggerInterrupt(message));
@@ -119,7 +128,7 @@ class DebugConnector {
               responses.add(message);
             }
           }
-        } 
+        }
         catch(e:haxe.io.Error) {
           switch(e) {
             case Custom(e) if (Std.is(e, haxe.io.Eof) || e == "EOF"):
@@ -140,7 +149,7 @@ class DebugConnector {
         }
       });
 
-      this.output_thread = cpp.vm.Thread.create(function() {
+      this.output_thread = Thread.create(function() {
         try {
           var out = socket.output;
           HaxeProtocol.writeServerIdentification(out);

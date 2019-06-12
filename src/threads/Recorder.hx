@@ -1,4 +1,9 @@
 package threads;
+#if haxe4
+import sys.thread.Thread;
+#else
+import cpp.vm.Thread;
+#end
 
 class Recorder {
   var _context:debug.Context;
@@ -15,7 +20,7 @@ class Recorder {
     _thread_spawned = true;
 
     var out = sys.io.File.write(output, false);
-    cpp.vm.Thread.create(function() {
+    Thread.create(function() {
       var data = _context.recorder;
       while (true) {
         try {
@@ -38,7 +43,7 @@ class Recorder {
             #end
 
             buf.add(cur.msg);
-            
+
             buf.add('\n');
             #if DEBUG_MESSAGES
             buf.add('--------------------------------------------\n\n');
@@ -62,7 +67,7 @@ class Recorder {
             buf.add(cur.msg);
             buf.add('\n');
           }
-          
+
           out.writeString(buf.toString());
           out.flush();
         } catch(e:Dynamic) {

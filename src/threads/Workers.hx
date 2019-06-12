@@ -1,5 +1,12 @@
 package threads;
+#if haxe4
+import sys.thread.Deque;
+import sys.thread.Thread;
+#else
 import cpp.vm.Deque;
+import cpp.vm.Thread;
+#end
+
 import utils.Log;
 
 class Workers {
@@ -19,7 +26,7 @@ class Workers {
 
     Log.verbose('Creating $amount workers');
     for (i in 0...amount) {
-      cpp.vm.Thread.create(function() {
+      Thread.create(function() {
         try {
           while(true) {
             var cb = worker_fns.pop(true);

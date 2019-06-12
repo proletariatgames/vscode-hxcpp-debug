@@ -1,4 +1,9 @@
 package utils;
+#if haxe4
+import sys.thread.Thread;
+#else
+import cpp.vm.Thread;
+#end
 
 class Tools {
   public static function spawn_process(cmd:String, args:Array<String>, cwd:String, cb:Int->Void) {
@@ -7,7 +12,7 @@ class Tools {
       Sys.setCwd(cwd);
       var proc = new sys.io.Process(cmd, args);
       Sys.setCwd(old);
-      cpp.vm.Thread.create(function() {
+      Thread.create(function() {
         var out = proc.stdout;
         try {
           while(true) {
@@ -20,7 +25,7 @@ class Tools {
           Log.error('Error while reading output from process $cmd: $e');
         }
       });
-      cpp.vm.Thread.create(function() {
+      Thread.create(function() {
           var out = proc.stderr;
           try {
             while(true) {
@@ -33,7 +38,7 @@ class Tools {
             Log.error('Error while reading output from process $cmd: $e');
           }
       });
-      cpp.vm.Thread.create(function() {
+      Thread.create(function() {
         var exit = proc.exitCode();
         cb(exit);
       });
@@ -50,7 +55,7 @@ class Tools {
       Sys.setCwd(cwd);
       var proc = new sys.io.Process(cmd, args);
       Sys.setCwd(old);
-      cpp.vm.Thread.create(function() {
+      Thread.create(function() {
         var out = proc.stdout;
         try {
           while(true) {
@@ -63,7 +68,7 @@ class Tools {
           Log.error('Error while reading output from process $cmd: $e');
         }
       });
-      cpp.vm.Thread.create(function() {
+      Thread.create(function() {
         var out = proc.stderr;
         try {
           while(true) {

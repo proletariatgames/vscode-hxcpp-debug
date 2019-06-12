@@ -1,8 +1,4 @@
 package debug;
-import cpp.vm.Thread;
-import cpp.vm.Deque;
-import cpp.vm.Mutex;
-
 import debugger.IController;
 
 import sys.FileSystem;
@@ -13,11 +9,26 @@ import utils.Log;
 
 import vscode.debugger.Data;
 
+#if haxe4
+import sys.thread.Thread;
+import sys.thread.Deque;
+import sys.thread.Lock;
+import sys.thread.Mutex;
+private typedef SysThread = sys.thread.Thread;
+#else
+import cpp.vm.Thread;
+import cpp.vm.Deque;
+import cpp.vm.Lock;
+import cpp.vm.Mutex;
+private typedef SysThread = cpp.vm.Thread;
+#end
+
+
 class Context {
   public static var instance(default, null):Context;
   private static var seq:cpp.AtomicInt = 0;
 
-  public var main_thread(default, null):cpp.vm.Thread;
+  public var main_thread(default, null):SysThread;
   public var source_files(default, null):SourceFiles;
   public var breakpoints(default, null):Breakpoints;
   public var thread_cache(default, null):ThreadCache;
@@ -30,7 +41,7 @@ class Context {
   var _resetting = false;
 
   // all
-  @:allow(threads) var exit_lock:cpp.vm.Lock = new cpp.vm.Lock();
+  @:allow(threads) var exit_lock:Lock = new Lock();
   // recorder
   @:allow(threads.Recorder) var recorder(default, null):Deque<{ date:Date, io:Bool, ?input:Bool, ?log:utils.Log.LogLevel, msg:String, ?pos:haxe.PosInfos }> = new Deque();
 
@@ -65,7 +76,7 @@ class Context {
     }
     instance = this;
 
-    this.main_thread = cpp.vm.Thread.current();
+    this.main_thread = SysThread.current();
     this.source_files = new SourceFiles(this,null);
     this.breakpoints = new Breakpoints(this);
     this.thread_cache = new ThreadCache(this);
@@ -189,7 +200,7 @@ class Context {
 
   // threads.StdoutProcessor
   private var responses:Map<Int, Response->Void> = new Map();
-  private var responses_mutex:cpp.vm.Mutex = new cpp.vm.Mutex();
+  private var responses_mutex:Mutex = new Mutex();
 
   @:allow(threads.StdinProcessor) function get_response_for_seq(seq:Int):Null<Response->Void> {
     var ret = null;
@@ -215,7 +226,7 @@ class Context {
   }
 
   public function add_request_sync(output:Request, ?timeout:Float):Response {
-    var lock = new cpp.vm.Lock();
+    var lock = new Lock();
     var ret = null;
     add_request(output, function(r) {
       ret = r;
@@ -284,7 +295,7 @@ class Context {
   }
 
   public function add_debugger_command_sync(cmd:Command, ?timeout:Float):debugger.IController.Message {
-    var lock = new cpp.vm.Lock();
+    var lock = new Lock();
     var ret = null;
     add_debugger_command(cmd, function(r) {
       ret = r;
@@ -314,7 +325,7 @@ class Context {
       cb([]);
       return;
     }
-    var mutex = new cpp.vm.Mutex(),
+    var mutex = new Mutex(),
         ret = [],
         count = 0,
         len = cmds.length;

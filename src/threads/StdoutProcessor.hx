@@ -1,5 +1,11 @@
 package threads;
+#if haxe4
+import sys.thread.Deque;
+import sys.thread.Thread;
+#else
 import cpp.vm.Deque;
+import cpp.vm.Thread;
+#end
 
 class StdoutProcessor {
   public var stdout(default, null):Deque<String> = new Deque();
@@ -15,7 +21,7 @@ class StdoutProcessor {
       throw 'Thread already spawned';
     }
     _thread_spawned = true;
-    cpp.vm.Thread.create(function() {
+    Thread.create(function() {
       var isWindows = Sys.systemName() == "Windows";
       var separator = isWindows ? '\n\n' : '\r\n\r\n';
       var stdoutOutput = Sys.stdout();

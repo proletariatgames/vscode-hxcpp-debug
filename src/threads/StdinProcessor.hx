@@ -1,10 +1,20 @@
 package threads;
-import cpp.vm.Deque;
+
 import utils.InputData;
 import utils.Log.*;
 import vscode.debugger.Data;
 
 using StringTools;
+
+#if haxe4
+import sys.thread.Deque;
+import sys.thread.Thread;
+private typedef SysThread = sys.thread.Thread;
+#else
+import cpp.vm.Deque;
+import cpp.vm.Thread;
+private typedef SysThread = cpp.vm.Thread;
+#end
 
 class StdinProcessor {
   public var inputs(default, null):Deque<InputData> = new Deque();
@@ -14,13 +24,13 @@ class StdinProcessor {
   public function new(ctx) {
     _context = ctx;
   }
-  
+
   public function spawn_thread() {
     if (_thread_spawned) {
       throw 'Thread already spawned';
     }
     _thread_spawned = true;
-    cpp.vm.Thread.create(function() {
+    SysThread.create(function() {
       var input = Sys.stdin();
       var wrapped:InputHelper = null;
 #if DEBUG_PROTOCOL
@@ -73,7 +83,7 @@ class StdinProcessor {
           } else {
             _context.record_io(true, txtMsg);
           }
-        } 
+        }
         catch(e:haxe.io.Error) {
           switch(e) {
             case Custom(e) if (Std.is(e, haxe.io.Eof) || e == "EOF"):
@@ -105,7 +115,7 @@ class InputHelper extends haxe.io.Input {
     this.wrapped = wrapped;
     this.buf = new StringBuf();
   }
-  
+
 
   override public function readByte() : Int {
     var ret = wrapped.readByte();
